@@ -130,13 +130,20 @@ def run_ocr():
   custom_config = r'--oem 3 --psm 6 -c preserve_interword_spaces=1'
 
   def generate():
-    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-      futures = [
-          executor.submit(process_single_cell, cell, img, custom_config)
-          for cell in cells
-      ]
-      for future in as_completed(futures):
-        yield json.dumps(future.result()) + '\n'
+    try:
+      with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+        futures = [
+            executor.submit(process_single_cell, cell, img, custom_config)
+            for cell in cells
+        ]
+        for future in as_completed(futures):
+          yield json.dumps(future.result()) + '\n'
+    except (GeneratorExit, BrokenPipeError, ConnectionResetError):
+      print(
+          'Client disconnected or canceled request. Halting backend OCR'
+          ' tasks.'
+      )
+      return
 
   return Response(generate(), mimetype='application/x-ndjson')
 

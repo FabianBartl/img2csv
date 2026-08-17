@@ -2,6 +2,7 @@ let isDrawing = false;
 let startX, startY;
 let isFrozen = false;
 let hasRunOcr = false;
+let ocrAbortController = null;
 
 let isFlickerEnabled = false;
 let flickerInterval = null;
@@ -28,6 +29,7 @@ const stripMeta = document.getElementById('strip-meta');
 const rowsInput = document.getElementById('rows-input');
 const colsInput = document.getElementById('cols-input');
 const btnOcr = document.getElementById('btn-ocr');
+const btnCancelOcr = document.getElementById('btn-cancel-ocr');
 const btnCsv = document.getElementById('btn-csv');
 const btnClear = document.getElementById('btn-clear');
 const freezeToggle = document.getElementById('freeze-toggle');
@@ -91,6 +93,12 @@ if (imageInput) {
             reader.readAsDataURL(file);
         }
     });
+}
+
+function cancelOCR() {
+    if (ocrAbortController) {
+        ocrAbortController.abort();
+    }
 }
 
 function resetTable() {
@@ -554,7 +562,11 @@ async function startOCR(e) {
         }
     }
 
-    if (btnOcr) btnOcr.disabled = true;
+    ocrAbortController = new AbortController();
+
+    // Hide "Run OCR" button and show "Cancel OCR" button
+    if (btnOcr) btnOcr.style.display = 'none';
+    if (btnCancelOcr) btnCancelOcr.style.display = 'inline-block';
 
     cellsMetadata = [];
     activeCellIndex = null;
@@ -604,20 +616,31 @@ async function startOCR(e) {
     }
 
     try {
-        await runOCR(sourceImage.src, cellsToProcess);
+        await runOCR(sourceImage.src, cellsToProcess, ocrAbortController.signal);
         hasRunOcr = true;
     } catch (err) {
-        console.error("OCR execution error:", err);
+        if (err.name === 'AbortError') {
+            console.log('OCR task canceled by user or connection lost.');
+        } else {
+            console.error("OCR execution error:", err);
+        }
     } finally {
-        if (btnOcr) btnOcr.disabled = false;
+        // Restore "Run OCR" button and hide "Cancel OCR" button
+        if (btnOcr) {
+            btnOcr.style.display = 'inline-block';
+            btnOcr.disabled = false;
+        }
+        if (btnCancelOcr) btnCancelOcr.style.display = 'none';
+        ocrAbortController = null;
     }
 }
 
-async function runOCR(imageData, cells) {
+async function runOCR(imageData, cells, signal) {
     const response = await fetch('/ocr', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ image: imageData, cells: cells })
+        body: JSON.stringify({ image: imageData, cells: cells }),
+        signal: signal
     });
 
     if (!response.ok) {
