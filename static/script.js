@@ -891,7 +891,7 @@ function exportCSV() {
             }
             cellIndex++;
         }
-        csvContent += rowData.join(",") + "\n";
+        csvContent += rowData.join(";") + "\n";
     }
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
