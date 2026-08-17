@@ -18,18 +18,18 @@
         <label>Cols: <input type="number" id="cols-input" value="3" min="1"></label>
     </div>
 
-    <button id="btn-draw" class="btn primary" onclick="startDrawing()">1. Draw Table</button>
+    <button type="button" id="btn-draw" class="btn primary" onclick="startDrawing()">1. Draw Table</button>
 
     <div class="tool-group">
         <label for="text-color">Color:</label>
         <input type="color" id="text-color" value="#d10000" onchange="updateTextColor(this.value)">
     </div>
 
-    <button id="btn-ocr" class="btn" onclick="runOCR()" disabled>2. Run OCR</button>
+    <button type="button" id="btn-ocr" class="btn" disabled>2. Run OCR</button>
 
     <div class="tool-group toggle-group">
         <label class="switch-label">
-            <input type="checkbox" id="freeze-toggle" onchange="toggleFreeze(this.checked)" disabled>
+            <input type="checkbox" id="freeze-toggle" disabled>
             <span class="slider"></span>
             <span id="freeze-text">Frozen Layout</span>
         </label>
@@ -63,8 +63,8 @@
         </label>
     </div>
 
-    <button id="btn-clear" class="btn warning" onclick="clearTexts()" disabled>Clear Text</button>
-    <button id="btn-csv" class="btn success" onclick="exportCSV()" disabled>Export CSV</button>
+    <button type="button" id="btn-clear" class="btn warning" disabled>Clear Text</button>
+    <button type="button" id="btn-csv" class="btn success" disabled>Export CSV</button>
 </div>
 
 <div id="workspace">
@@ -92,7 +92,7 @@
     </div>
     <div class="strip-info">
         <label id="strip-meta">Active Cell (Row -, Col -)</label>
-        <input type="text" id="strip-input" placeholder="Edit current cell text..." oninput="updateActiveCellText(this.value)">
+        <input type="text" id="strip-input" placeholder="Edit current cell text...">
     </div>
 </div>
 

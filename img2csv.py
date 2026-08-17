@@ -1,5 +1,5 @@
 import base64
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 import io
 import json
@@ -7,7 +7,7 @@ import os
 import re
 import uuid
 import cv2
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, Response, jsonify, render_template, request
 from flask_cors import CORS
 import numpy as np
 from PIL import Image, ImageEnhance
@@ -103,33 +103,53 @@ def index():
 
 @app.route('/ocr', methods=['POST'])
 def run_ocr():
-  data = request.json
-  image_data = data['image'].split(',')[1]
-  cells = data['cells']
+  data = request.get_json(silent=True) or {}
 
-  image_bytes = base64.b64decode(image_data)
-  img = Image.open(io.BytesIO(image_bytes))
-  img.load()  # Fully load pixel data into memory for thread safety
+  raw_image = (
+      data.get('image')
+      or data.get('imageData')
+      or data.get('image_data')
+      or data.get('img')
+  )
+  cells = data.get('cells', [])
+
+  if not raw_image:
+    return jsonify({'error': 'Missing image data in request payload.'}), 400
+
+  try:
+    if ',' in raw_image:
+      image_bytes = base64.b64decode(raw_image.split(',', 1)[1])
+    else:
+      image_bytes = base64.b64decode(raw_image)
+
+    img = Image.open(io.BytesIO(image_bytes))
+    img.load()
+  except Exception as e:
+    return jsonify({'error': f'Invalid image format: {str(e)}'}), 400
 
   custom_config = r'--oem 3 --psm 6 -c preserve_interword_spaces=1'
 
-  # Run OCR in parallel across N-1 CPU cores while maintaining order
-  with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-    results = list(
-        executor.map(
-            lambda cell: process_single_cell(cell, img, custom_config), cells
-        )
-    )
+  def generate():
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+      futures = [
+          executor.submit(process_single_cell, cell, img, custom_config)
+          for cell in cells
+      ]
+      for future in as_completed(futures):
+        yield json.dumps(future.result()) + '\n'
 
-  return jsonify({'results': results})
+  return Response(generate(), mimetype='application/x-ndjson')
 
 
 @app.route('/save_training_data', methods=['POST'])
 def save_training_data():
   try:
-    data = request.json
-    image_data = data['image'].split(',')[1]
-    image_bytes = base64.b64decode(image_data)
+    data = request.json or {}
+    raw_image = data.get('image', '')
+    if ',' in raw_image:
+      image_bytes = base64.b64decode(raw_image.split(',', 1)[1])
+    else:
+      image_bytes = base64.b64decode(raw_image)
 
     unique_id = (
         f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}"
@@ -143,11 +163,11 @@ def save_training_data():
 
     training_record = {
         'image_filename': image_filename,
-        'image_width': data['image_width'],
-        'image_height': data['image_height'],
-        'exported_at': data['timestamp'],
-        'total_cells': len(data['cells']),
-        'cells': data['cells'],
+        'image_width': data.get('image_width'),
+        'image_height': data.get('image_height'),
+        'exported_at': data.get('timestamp'),
+        'total_cells': len(data.get('cells', [])),
+        'cells': data.get('cells', []),
     }
 
     json_path = os.path.join(TRAINING_DIR, json_filename)
@@ -160,5 +180,5 @@ def save_training_data():
 
 
 if __name__ == '__main__':
-  app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # Max 16MB per request
+  app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
   app.run(debug=False, port=5000, host='0.0.0.0')

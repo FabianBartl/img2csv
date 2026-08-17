@@ -1,6 +1,7 @@
 let isDrawing = false;
 let startX, startY;
 let isFrozen = false;
+let hasRunOcr = false;
 
 let isFlickerEnabled = false;
 let flickerInterval = null;
@@ -26,6 +27,10 @@ const stripMeta = document.getElementById('strip-meta');
 
 const rowsInput = document.getElementById('rows-input');
 const colsInput = document.getElementById('cols-input');
+const btnOcr = document.getElementById('btn-ocr');
+const btnCsv = document.getElementById('btn-csv');
+const btnClear = document.getElementById('btn-clear');
+const freezeToggle = document.getElementById('freeze-toggle');
 
 window.addEventListener('beforeunload', (e) => {
     if (sourceImage && sourceImage.src) {
@@ -52,6 +57,13 @@ if (colsInput) {
     });
 }
 
+if (btnOcr) btnOcr.addEventListener('click', startOCR);
+if (btnCsv) btnCsv.addEventListener('click', exportCSV);
+if (btnClear) btnClear.addEventListener('click', clearTexts);
+if (freezeToggle) {
+    freezeToggle.addEventListener('change', (e) => toggleFreeze(e.target.checked));
+}
+
 updateUIState(false);
 
 if (imageInput) {
@@ -66,6 +78,7 @@ if (imageInput) {
                 if (gridContainer.style.display !== 'none' && colPositions.length > 0) {
                     cellsMetadata = [];
                     activeCellIndex = null;
+                    hasRunOcr = false;
                     if (inspectionStrip) inspectionStrip.classList.remove('active');
                     updateStripCanvasMarking(null);
                     document.querySelectorAll('.cell-text').forEach(el => el.innerText = '');
@@ -84,6 +97,7 @@ function resetTable() {
     stopFlicker();
     if (flickerToggle) flickerToggle.checked = false;
     isFlickerEnabled = false;
+    hasRunOcr = false;
 
     gridContainer.style.display = 'none';
     const cellsLayer = document.getElementById('cells-layer');
@@ -101,11 +115,6 @@ function resetTable() {
 }
 
 function updateUIState(hasTable) {
-    const btnOcr = document.getElementById('btn-ocr');
-    const btnCsv = document.getElementById('btn-csv');
-    const btnClear = document.getElementById('btn-clear');
-    const freezeToggle = document.getElementById('freeze-toggle');
-
     if (btnOcr) btnOcr.disabled = !hasTable;
     if (btnCsv) btnCsv.disabled = !hasTable;
     if (btnClear) btnClear.disabled = !hasTable;
@@ -172,6 +181,7 @@ function clearTexts() {
 
     cellsMetadata = []; 
     activeCellIndex = null;
+    hasRunOcr = false;
 
     document.querySelectorAll('.cell-text').forEach(el => el.innerText = ''); 
     document.querySelectorAll('.grid-cell').forEach(cell => {
@@ -197,6 +207,7 @@ function startDrawing() {
     stopFlicker();
     if (flickerToggle) flickerToggle.checked = false;
     isFlickerEnabled = false;
+    hasRunOcr = false;
 
     toggleFreeze(false);
     drawLayer.style.display = 'block';
@@ -277,6 +288,7 @@ function renderGrid() {
             const cellIndex = (r * cols) + c;
             const cell = document.createElement('div');
             cell.className = 'grid-cell';
+            cell.dataset.index = cellIndex;
             cell.style.left = (colPositions[c] * tableRect.w) + 'px';
             cell.style.top = (rowPositions[r] * tableRect.h) + 'px';
             cell.style.width = ((colPositions[c+1] - colPositions[c]) * tableRect.w) + 'px';
@@ -530,68 +542,146 @@ function deleteRow(index) {
     renderGrid();
 }
 
-async function runOCR() {
-    if (cellsMetadata.length > 0) {
-        if (!confirm('OCR has already been run. Are you sure you want to re-run OCR and overwrite current results?')) {
+async function startOCR(e) {
+    if (e) e.preventDefault();
+
+    if (!sourceImage || !sourceImage.naturalWidth) return alert("Please load an image first.");
+    if (gridContainer.style.display === 'none') return alert("Please draw a table grid first.");
+
+    if (hasRunOcr) {
+        if (!confirm("OCR has already been performed. Running it again will overwrite all existing table values. Continue?")) {
             return;
         }
     }
 
+    if (btnOcr) btnOcr.disabled = true;
+
     cellsMetadata = [];
     activeCellIndex = null;
-    updateStripCanvasMarking(null);
     document.querySelectorAll('.grid-cell').forEach(cell => {
+        const textEl = cell.querySelector('.cell-text');
+        if (textEl) textEl.innerText = '';
         cell.classList.remove('cell-edited', 'confidence-low', 'confidence-medium', 'active-cell');
     });
 
-    const cellsData = [];
-    const cells = document.querySelectorAll('.grid-cell');
+    if (stripInput) stripInput.value = '';
+    if (stripMeta) stripMeta.innerText = '';
+    updateStripCanvasMarking(null);
+
+    toggleFreeze(true);
+
     const imgRect = sourceImage.getBoundingClientRect();
     const scaleX = sourceImage.naturalWidth / imgRect.width;
     const scaleY = sourceImage.naturalHeight / imgRect.height;
 
-    cells.forEach((cell, index) => {
-        const rect = cell.getBoundingClientRect();
-        cellsData.push({
-            id: index,
-            x: (rect.left - imgRect.left) * scaleX,
-            y: (rect.top - imgRect.top) * scaleY,
-            width: rect.width * scaleX,
-            height: rect.height * scaleY
-        });
-        cell.querySelector('.cell-text').innerText = "...";
-    });
+    const cols = colPositions.length - 1;
+    const rows = rowPositions.length - 1;
+    const cellElements = document.querySelectorAll('.grid-cell');
+
+    const cellsToProcess = [];
+    let cellIndex = 0;
+
+    for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+            const cellEl = cellElements[cellIndex];
+            if (cellEl) {
+                const rect = cellEl.getBoundingClientRect();
+                const cropX = Math.round((rect.left - imgRect.left) * scaleX);
+                const cropY = Math.round((rect.top - imgRect.top) * scaleY);
+                const cropW = Math.round(rect.width * scaleX);
+                const cropH = Math.round(rect.height * scaleY);
+
+                cellsToProcess.push({
+                    id: cellIndex,
+                    x: cropX,
+                    y: cropY,
+                    width: cropW,
+                    height: cropH
+                });
+            }
+            cellIndex++;
+        }
+    }
 
     try {
-        const response = await fetch('/ocr', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ image: sourceImage.src, cells: cellsData })
-        });
-        const data = await response.json();
-        
-        cellsMetadata = [];
-        data.results.forEach(res => {
-            cellsMetadata[res.id] = { 
-                confidence: res.confidence, 
-                originalText: res.text,
-                isEdited: false 
-            };
-            if (cells[res.id]) {
-                cells[res.id].querySelector('.cell-text').innerText = res.text;
-            }
-        });
+        await runOCR(sourceImage.src, cellsToProcess);
+        hasRunOcr = true;
+    } catch (err) {
+        console.error("OCR execution error:", err);
+    } finally {
+        if (btnOcr) btnOcr.disabled = false;
+    }
+}
 
-        toggleFreeze(true);
-        if (cells.length > 0) setActiveCell(0);
-    } catch (error) {
-        alert('Error connecting to OCR backend.');
+async function runOCR(imageData, cells) {
+    const response = await fetch('/ocr', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: imageData, cells: cells })
+    });
+
+    if (!response.ok) {
+        console.error("OCR Request failed with status:", response.status);
+        return;
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        
+        buffer = lines.pop(); 
+
+        for (const line of lines) {
+            if (!line.trim()) continue;
+            
+            const cellData = JSON.parse(line);
+            updateCellInUI(cellData.id, cellData.text, cellData.confidence);
+        }
+    }
+}
+
+function updateCellInUI(id, text, confidence) {
+    const cells = document.querySelectorAll('.grid-cell');
+    const cell = cells[id];
+    if (!cell) return;
+
+    const textEl = cell.querySelector('.cell-text');
+    if (textEl) {
+        textEl.innerText = text;
+    }
+
+    cellsMetadata[id] = {
+        confidence: confidence,
+        originalText: text,
+        isEdited: false
+    };
+
+    cell.classList.remove('cell-edited', 'confidence-low', 'confidence-medium');
+    if (confidence < 70) {
+        cell.classList.add('confidence-low');
+    } else if (confidence < 90) {
+        cell.classList.add('confidence-medium');
+    }
+
+    if (activeCellIndex === id) {
+        if (stripInput) stripInput.value = text;
+        const cols = colPositions.length - 1;
+        const r = Math.floor(id / cols) + 1;
+        const c = (id % cols) + 1;
+        if (stripMeta) stripMeta.innerText = `Row ${r}, Col ${c} (Confidence: ${confidence}%)`;
+        updateStripCanvasMarking(id);
     }
 }
 
 function toggleFreeze(freezeState) {
     isFrozen = freezeState;
-    const freezeToggle = document.getElementById('freeze-toggle');
     if (freezeToggle) freezeToggle.checked = freezeState;
     const ws = document.getElementById('workspace') || document.body;
     
