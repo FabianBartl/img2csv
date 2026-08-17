@@ -5,14 +5,11 @@
 body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     margin: 20px;
-    margin-bottom: 120px; /* Space for fixed inspection bar */
+    margin-bottom: 120px;
     background: #f4f6f8;
     color: #333;
 }
 
-/* -------------------------------------------------------------------------- */
-/* Sticky Top Toolbar (Fixiert beim Scrollen)                                 */
-/* -------------------------------------------------------------------------- */
 .toolbar {
     position: sticky;
     top: 0;
@@ -362,7 +359,7 @@ input:checked + .slider:before {
 }
 
 .frozen .grid-cell {
-    border-color: rgba(0, 200, 0, 0.5); /* 1px normal layout line */
+    border-color: rgba(0, 200, 0, 0.5);
 }
 
 .frozen .cell-text {
@@ -378,27 +375,24 @@ input:checked + .slider:before {
     display: none !important;
 }
 
-/* OCR Confidence & Edited Inset Outlines */
 .confidence-medium {
-    box-shadow: inset 0 0 0 2px #d97706 !important; /* Amber */
+    box-shadow: inset 0 0 0 2px #d97706 !important;
 }
 
 .confidence-low {
-    box-shadow: inset 0 0 0 2px #cf222e !important; /* Red */
+    box-shadow: inset 0 0 0 2px #cf222e !important;
 }
 
 .cell-edited {
-    box-shadow: inset 0 0 0 2px #7c3aed !important; /* Purple */
+    box-shadow: inset 0 0 0 2px #7c3aed !important;
 }
 
-/* Selected Active Cell */
 .grid-cell.active-cell {
     outline: 2px solid #0969da !important;
     outline-offset: -2px;
     z-index: 20 !important;
 }
 
-/* Docked Inspection Strip Panel */
 #inspection-strip {
     position: fixed;
     bottom: 0;
@@ -430,7 +424,6 @@ input:checked + .slider:before {
     border-radius: 4px;
 }
 
-/* Inspection Canvas Image + Status Colored Borders */
 #strip-canvas {
     height: 100%;
     display: block;
@@ -441,22 +434,22 @@ input:checked + .slider:before {
 }
 
 #strip-canvas.confidence-high {
-    border: 2px solid #1f883d !important; /* Green */
+    border: 2px solid #1f883d !important;
     box-shadow: 0 0 6px rgba(31, 136, 61, 0.5);
 }
 
 #strip-canvas.confidence-medium {
-    border: 2px solid #d97706 !important; /* Orange */
+    border: 2px solid #d97706 !important;
     box-shadow: 0 0 6px rgba(217, 119, 6, 0.5);
 }
 
 #strip-canvas.confidence-low {
-    border: 2px solid #cf222e !important; /* Red */
+    border: 2px solid #cf222e !important;
     box-shadow: 0 0 6px rgba(207, 34, 46, 0.5);
 }
 
 #strip-canvas.cell-edited {
-    border: 2px solid #7c3aed !important; /* Purple */
+    border: 2px solid #7c3aed !important;
     box-shadow: 0 0 6px rgba(124, 58, 237, 0.5);
 }
 

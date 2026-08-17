@@ -41,7 +41,6 @@
         </label>
     </div>
 
-    <!-- Explicit Flicker Toggle (Default OFF) -->
     <div class="tool-group toggle-group">
         <label class="switch-label">
             <input type="checkbox" id="flicker-toggle" onchange="toggleFlicker(this.checked)">
@@ -56,6 +55,14 @@
         </label>
     </div>
 
+    <div class="tool-group toggle-group">
+        <label class="switch-label">
+            <input type="checkbox" id="training-toggle">
+            <span class="slider"></span>
+            <span>Fine-Training Data</span>
+        </label>
+    </div>
+
     <button id="btn-clear" class="btn warning" onclick="clearTexts()" disabled>Clear Text</button>
     <button id="btn-csv" class="btn success" onclick="exportCSV()" disabled>Export CSV</button>
 </div>
@@ -65,14 +72,11 @@
     <div id="draw-layer"></div>
     
     <div id="grid-container">
-        <!-- Main Movement Control -->
-        <div id="move-handle" title="Drag to move entire table">⠿ Move Table</div>
+        <div id="move-handle" title="Drag to move entire table">Move Table</div>
         
-        <!-- Corner Resize Handles -->
         <div id="resize-tl-handle" class="corner-resize" title="Drag to resize from top-left"></div>
         <div id="resize-br-handle" class="corner-resize" title="Drag to resize from bottom-right"></div>
         
-        <!-- Edge Append Buttons -->
         <div id="add-col-btn" title="Add column to right edge">+</div>
         <div id="add-row-btn" title="Add row to bottom edge">+</div>
         
@@ -82,7 +86,6 @@
     </div>
 </div>
 
-<!-- Docked Row Inspection Strip Panel -->
 <div id="inspection-strip">
     <div class="strip-canvas-container">
         <canvas id="strip-canvas"></canvas>

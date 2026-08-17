@@ -27,7 +27,6 @@ const stripMeta = document.getElementById('strip-meta');
 const rowsInput = document.getElementById('rows-input');
 const colsInput = document.getElementById('cols-input');
 
-// Warn before accidental leave
 window.addEventListener('beforeunload', (e) => {
     if (sourceImage && sourceImage.src) {
         e.preventDefault();
@@ -266,7 +265,6 @@ function renderGrid() {
     const colHandlesDiv = document.getElementById('col-handles') || gridContainer;
     const rowHandlesDiv = document.getElementById('row-handles') || gridContainer;
 
-    // Clear previous dynamic elements if designated containers exist
     if (document.getElementById('cells-layer')) cellsLayer.innerHTML = '';
     if (document.getElementById('col-handles')) colHandlesDiv.innerHTML = '';
     if (document.getElementById('row-handles')) rowHandlesDiv.innerHTML = '';
@@ -333,7 +331,7 @@ function renderGrid() {
 
             const delBtn = document.createElement('span'); 
             delBtn.className = 'handle-del'; 
-            delBtn.innerText = '×';
+            delBtn.innerText = 'x';
             delBtn.onmousedown = (e) => { e.stopPropagation(); deleteCol(c); };
 
             handle.appendChild(delBtn);
@@ -352,7 +350,7 @@ function renderGrid() {
 
             const delBtn = document.createElement('span'); 
             delBtn.className = 'handle-del'; 
-            delBtn.innerText = '×';
+            delBtn.innerText = 'x';
             delBtn.onmousedown = (e) => { e.stopPropagation(); deleteRow(r); };
 
             handle.appendChild(delBtn);
@@ -623,13 +621,13 @@ function updateStripCanvasMarking(index) {
 
     const meta = cellsMetadata[index];
     if (meta.isEdited) {
-        stripCanvas.classList.add('cell-edited');       // Purple
+        stripCanvas.classList.add('cell-edited');
     } else if (meta.confidence < 70) {
-        stripCanvas.classList.add('confidence-low');     // Red
+        stripCanvas.classList.add('confidence-low');
     } else if (meta.confidence < 90) {
-        stripCanvas.classList.add('confidence-medium');  // Orange
+        stripCanvas.classList.add('confidence-medium');
     } else {
-        stripCanvas.classList.add('confidence-high');    // Green
+        stripCanvas.classList.add('confidence-high');
     }
 }
 
@@ -788,4 +786,75 @@ function exportCSV() {
     link.href = URL.createObjectURL(blob);
     link.download = "table_extract.csv";
     link.click();
+
+    const trainingToggle = document.getElementById('training-toggle');
+    if (trainingToggle && trainingToggle.checked) {
+        sendTrainingDataToServer();
+    }
+}
+
+async function sendTrainingDataToServer() {
+    if (!sourceImage || !sourceImage.naturalWidth) return;
+
+    const imgRect = sourceImage.getBoundingClientRect();
+    const scaleX = sourceImage.naturalWidth / imgRect.width;
+    const scaleY = sourceImage.naturalHeight / imgRect.height;
+
+    const cols = colPositions.length - 1;
+    const rows = rowPositions.length - 1;
+    const cellElements = document.querySelectorAll('.grid-cell');
+
+    const metadataCells = [];
+    let cellIndex = 0;
+
+    for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+            const cellEl = cellElements[cellIndex];
+            if (cellEl) {
+                const rect = cellEl.getBoundingClientRect();
+                const cropX = Math.round((rect.left - imgRect.left) * scaleX);
+                const cropY = Math.round((rect.top - imgRect.top) * scaleY);
+                const cropW = Math.round(rect.width * scaleX);
+                const cropH = Math.round(rect.height * scaleY);
+
+                const finalValue = cellEl.querySelector('.cell-text').innerText.trim();
+                const meta = cellsMetadata[cellIndex] || {};
+
+                metadataCells.push({
+                    cell_id: cellIndex,
+                    row: r,
+                    col: c,
+                    bbox: {
+                        x: cropX,
+                        y: cropY,
+                        width: cropW,
+                        height: cropH
+                    },
+                    confidence: meta.confidence !== undefined ? meta.confidence : 100,
+                    original_text: meta.originalText || '',
+                    is_edited: !!meta.isEdited,
+                    final_value: finalValue
+                });
+            }
+            cellIndex++;
+        }
+    }
+
+    const jsonPayload = {
+        image: sourceImage.src,
+        image_width: sourceImage.naturalWidth,
+        image_height: sourceImage.naturalHeight,
+        timestamp: new Date().toISOString(),
+        cells: metadataCells
+    };
+
+    try {
+        await fetch('/save_training_data', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(jsonPayload)
+        });
+    } catch (err) {
+        console.error('Failed to dispatch training data to server:', err);
+    }
 }

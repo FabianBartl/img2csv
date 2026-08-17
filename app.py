@@ -1,6 +1,11 @@
 import base64
+
+from datetime import datetime
 import io
+import json
+import os
 import re
+import uuid
 import cv2
 from flask import Flask, jsonify, render_template, request
 from flask_cors import CORS
@@ -11,30 +16,28 @@ import pytesseract
 app = Flask(__name__, template_folder='templates', static_folder='static')
 CORS(app)
 
+TRAINING_DIR = os.path.join(os.getcwd(), 'training_data')
+os.makedirs(TRAINING_DIR, exist_ok=True)
+
 
 def preprocess_cell_image(cropped_pil_img):
   """Cleans table cell images for Tesseract without erasing character ink."""
-  # Convert PIL Image to OpenCV Grayscale
   img_np = np.array(cropped_pil_img.convert('L'))
   h, w = img_np.shape
 
   if h < 6 or w < 6:
     return cropped_pil_img
 
-  # 1. Binarize temporarily only to locate full-width separator lines
   _, thresh = cv2.threshold(
       img_np, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU
   )
 
-  # Detect horizontal lines spanning at least 65% of the cell width
   horiz_size = int(w * 0.65)
   if horiz_size >= 5:
     horiz_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (horiz_size, 1))
     horiz_lines = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, horiz_kernel)
-    # Erase only long horizontal sum/divider lines in the grayscale image
     img_np[horiz_lines > 0] = 255
 
-  # 2. White-out 2px edge borders where box grid lines bleed into crops
   pad = 2
   if h > 8 and w > 8:
     img_np[:pad, :] = 255
@@ -43,11 +46,8 @@ def preprocess_cell_image(cropped_pil_img):
     img_np[:, -pad:] = 255
 
   cleaned_pil = Image.fromarray(img_np)
-
-  # 3. Upscale x2 with LANCZOS for smoother character curves
   cleaned_pil = cleaned_pil.resize((w * 2, h * 2), Image.Resampling.LANCZOS)
 
-  # 4. Moderate contrast boost while maintaining soft grayscale text edges
   enhancer = ImageEnhance.Contrast(cleaned_pil)
   cleaned_pil = enhancer.enhance(1.8)
 
@@ -81,7 +81,6 @@ def run_ocr():
       cropped_img = img.crop((left, top, right, bottom))
       processed_img = preprocess_cell_image(cropped_img)
 
-      # Extract detailed data including confidence scores
       data_dict = pytesseract.image_to_data(
           processed_img, config=custom_config, output_type=pytesseract.Output.DICT
       )
@@ -101,7 +100,6 @@ def run_ocr():
       text = ' '.join(recognized_texts)
       avg_conf = int(sum(confidences) / len(confidences)) if confidences else 100
 
-      # Strip leftover underscores/dashes caused by sum lines
       text = re.sub(r'^[_\-\s]+|[_\-\s]+$', '', text)
       text = re.sub(r'_{2,}', '', text)
     else:
@@ -111,6 +109,41 @@ def run_ocr():
     results.append({'id': cell['id'], 'text': text, 'confidence': avg_conf})
 
   return jsonify({'results': results})
+
+
+@app.route('/save_training_data', methods=['POST'])
+def save_training_data():
+  try:
+    data = request.json
+    image_data = data['image'].split(',')[1]
+    image_bytes = base64.b64decode(image_data)
+
+    unique_id = (
+        f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}"
+    )
+    image_filename = f'table_{unique_id}.png'
+    json_filename = f'table_{unique_id}.json'
+
+    image_path = os.path.join(TRAINING_DIR, image_filename)
+    with open(image_path, 'wb') as f:
+      f.write(image_bytes)
+
+    training_record = {
+        'image_filename': image_filename,
+        'image_width': data['image_width'],
+        'image_height': data['image_height'],
+        'exported_at': data['timestamp'],
+        'total_cells': len(data['cells']),
+        'cells': data['cells'],
+    }
+
+    json_path = os.path.join(TRAINING_DIR, json_filename)
+    with open(json_path, 'w', encoding='utf-8') as f:
+      json.dump(training_record, f, indent=2)
+
+    return jsonify({'status': 'success', 'id': unique_id})
+  except Exception as e:
+    return jsonify({'status': 'error', 'message': str(e)}), 500
 
 
 if __name__ == '__main__':
