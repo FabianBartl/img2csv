@@ -4,6 +4,8 @@ __pycache__/
 *$py.class
 v/
 venv/
+imgs/
+uploads/
 
 # C extensions
 *.so
