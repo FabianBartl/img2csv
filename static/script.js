@@ -2,7 +2,6 @@ let isDrawing = false;
 let startX, startY;
 let isFrozen = false;
 
-// Core State for Table
 let tableRect = { x: 0, y: 0, w: 0, h: 0 };
 let colPositions = []; 
 let rowPositions = []; 
@@ -18,9 +17,19 @@ const rowHandlesDiv = document.getElementById('row-handles');
 const rowsInput = document.getElementById('rows-input');
 const colsInput = document.getElementById('cols-input');
 
-// Allow UI Input changes to update grid LIVE
-rowsInput.addEventListener('change', () => { if(gridContainer.style.display !== 'none') { initProportionalGrid(); renderGrid(); }});
-colsInput.addEventListener('change', () => { if(gridContainer.style.display !== 'none') { initProportionalGrid(); renderGrid(); }});
+rowsInput.addEventListener('change', () => { 
+    if (gridContainer.style.display !== 'none') { 
+        initProportionalGrid(); 
+        renderGrid(); 
+    }
+});
+
+colsInput.addEventListener('change', () => { 
+    if (gridContainer.style.display !== 'none') { 
+        initProportionalGrid(); 
+        renderGrid(); 
+    }
+});
 
 updateUIState(false);
 
@@ -50,11 +59,22 @@ function updateUIState(hasTable) {
     document.getElementById('btn-csv').disabled = !hasTable;
     document.getElementById('btn-clear').disabled = !hasTable;
     document.getElementById('freeze-toggle').disabled = !hasTable;
-    if (!hasTable) toggleFreeze(false);
+    if (!hasTable) {
+        toggleFreeze(false);
+    }
 }
 
-function updateTextColor(color) { document.documentElement.style.setProperty('--text-color', color); }
-function clearTexts() { document.querySelectorAll('.cell-text').forEach(el => el.innerText = ''); }
+function updateTextColor(color) { 
+    document.documentElement.style.setProperty('--text-color', color); 
+}
+
+function updateOpacity(val) {
+    gridContainer.style.opacity = val;
+}
+
+function clearTexts() { 
+    document.querySelectorAll('.cell-text').forEach(el => el.innerText = ''); 
+}
 
 function startDrawing() {
     if (!sourceImage.src) return alert('Please load an image first!');
@@ -100,19 +120,23 @@ drawLayer.addEventListener('mouseup', () => {
     if (!isDrawing) return;
     isDrawing = false;
     drawLayer.style.display = 'none';
-    if (tableRect.w > 20 && tableRect.h > 20) { updateUIState(true); } else { resetTable(); }
+    if (tableRect.w > 20 && tableRect.h > 20) { 
+        updateUIState(true); 
+    } else { 
+        resetTable(); 
+    }
 });
 
 function initProportionalGrid() {
     const rows = parseInt(rowsInput.value);
     const cols = parseInt(colsInput.value);
-    colPositions = []; rowPositions = [];
+    colPositions = []; 
+    rowPositions = [];
     for (let c = 0; c <= cols; c++) colPositions.push(c / cols);
     for (let r = 0; r <= rows; r++) rowPositions.push(r / rows);
 }
 
 function renderGrid() {
-    // Save existing text to avoid wiping it on small layout changes
     const oldTexts = Array.from(document.querySelectorAll('.cell-text')).map(el => el.innerText);
 
     cellsLayer.innerHTML = '';
@@ -134,8 +158,9 @@ function renderGrid() {
             const textDiv = document.createElement('div');
             textDiv.className = 'cell-text';
             textDiv.contentEditable = true;
-            // Restore text if it existed
-            if(oldTexts[(r * cols) + c]) textDiv.innerText = oldTexts[(r * cols) + c];
+            if (oldTexts[(r * cols) + c]) {
+                textDiv.innerText = oldTexts[(r * cols) + c];
+            }
 
             cell.appendChild(textDiv);
             cellsLayer.appendChild(cell);
@@ -146,9 +171,20 @@ function renderGrid() {
         const handle = document.createElement('div');
         handle.className = 'col-handle';
         handle.style.left = (colPositions[c] * tableRect.w) + 'px';
-        const delBtn = document.createElement('span'); delBtn.className = 'handle-del'; delBtn.innerText = '×';
-        delBtn.onmousedown = (e) => { e.stopPropagation(); deleteCol(c); };
+
+        const bar = document.createElement('div');
+        bar.className = 'col-handle-bar';
+
+        const delBtn = document.createElement('span'); 
+        delBtn.className = 'handle-del'; 
+        delBtn.innerText = '×';
+        delBtn.onmousedown = (e) => { 
+            e.stopPropagation(); 
+            deleteCol(c); 
+        };
+
         handle.appendChild(delBtn);
+        handle.appendChild(bar);
         attachHandleDrag(handle, 'col', c);
         colHandlesDiv.appendChild(handle);
     }
@@ -157,17 +193,27 @@ function renderGrid() {
         const handle = document.createElement('div');
         handle.className = 'row-handle';
         handle.style.top = (rowPositions[r] * tableRect.h) + 'px';
-        const delBtn = document.createElement('span'); delBtn.className = 'handle-del'; delBtn.innerText = '×';
-        delBtn.onmousedown = (e) => { e.stopPropagation(); deleteRow(r); };
+
+        const bar = document.createElement('div');
+        bar.className = 'row-handle-bar';
+
+        const delBtn = document.createElement('span'); 
+        delBtn.className = 'handle-del'; 
+        delBtn.innerText = '×';
+        delBtn.onmousedown = (e) => { 
+            e.stopPropagation(); 
+            deleteRow(r); 
+        };
+
         handle.appendChild(delBtn);
+        handle.appendChild(bar);
         attachHandleDrag(handle, 'row', r);
         rowHandlesDiv.appendChild(handle);
     }
 }
 
-// Allow moving the table by clicking ANYWHERE on the cells
 gridContainer.onmousedown = (e) => {
-    if (isFrozen) return; // Prevent drag if we're trying to highlight OCR text
+    if (isFrozen) return; 
     e.stopPropagation();
     const startX = e.clientX - tableRect.x;
     const startY = e.clientY - tableRect.y;
@@ -187,8 +233,7 @@ gridContainer.onmousedown = (e) => {
     document.addEventListener('mouseup', onMouseUp);
 };
 
-// Corner Handle Resizing
-document.getElementById('resize-handle').onmousedown = (e) => {
+document.getElementById('resize-br-handle').onmousedown = (e) => {
     e.stopPropagation();
     const startW = tableRect.w;
     const startH = tableRect.h;
@@ -211,7 +256,42 @@ document.getElementById('resize-handle').onmousedown = (e) => {
     document.addEventListener('mouseup', onMouseUp);
 };
 
-// Edge Add Buttons
+document.getElementById('resize-tl-handle').onmousedown = (e) => {
+    e.stopPropagation();
+    const startW = tableRect.w;
+    const startH = tableRect.h;
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const origX = tableRect.x;
+    const origY = tableRect.y;
+
+    const onMouseMove = (moveEvent) => {
+        const deltaX = moveEvent.clientX - startX;
+        const deltaY = moveEvent.clientY - startY;
+
+        const newW = Math.max(50, startW - deltaX);
+        const newH = Math.max(50, startH - deltaY);
+
+        tableRect.x = origX + (startW - newW);
+        tableRect.y = origY + (startH - newH);
+        tableRect.w = newW;
+        tableRect.h = newH;
+
+        gridContainer.style.left = tableRect.x + 'px';
+        gridContainer.style.top = tableRect.y + 'px';
+        gridContainer.style.width = tableRect.w + 'px';
+        gridContainer.style.height = tableRect.h + 'px';
+        renderGrid();
+    };
+
+    const onMouseUp = () => {
+        document.removeEventListener('mousemove', onMouseMove);
+        document.removeEventListener('mouseup', onMouseUp);
+    };
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+};
+
 document.getElementById('add-col-btn').onmousedown = (e) => {
     e.stopPropagation();
     const cols = colPositions.length - 1;
@@ -219,7 +299,6 @@ document.getElementById('add-col-btn').onmousedown = (e) => {
     tableRect.w += avgColW;
     gridContainer.style.width = tableRect.w + 'px';
     
-    // Normalize existing positions to new total width
     const oldW = tableRect.w - avgColW;
     for (let i = 0; i < colPositions.length; i++) {
         colPositions[i] = (colPositions[i] * oldW) / tableRect.w;
@@ -266,6 +345,7 @@ function attachHandleDrag(element, type, index) {
             }
             renderGrid();
         };
+
         const onMouseUp = () => {
             document.removeEventListener('mousemove', onMouseMove);
             document.removeEventListener('mouseup', onMouseUp);
@@ -306,7 +386,7 @@ async function runOCR() {
         cell.querySelector('.cell-text').innerText = "...";
     });
 
-    toggleFreeze(true); // Lock the grid so users can edit text safely
+    toggleFreeze(true);
 
     try {
         const response = await fetch('/ocr', {
@@ -345,13 +425,12 @@ function exportCSV() {
         let rowData = [];
         for (let c = 0; c < cols; c++) {
             let val = cells[cellIndex].innerText.trim();
-            // Data Type Check
             if (!isNaN(Number(val)) && val !== '') {
-                rowData.push(val); // Standard Number
+                rowData.push(val);
             } else if (val.toLowerCase() === 'true' || val.toLowerCase() === 'false') {
-                rowData.push(val.toUpperCase()); // Boolean
+                rowData.push(val.toUpperCase());
             } else {
-                rowData.push(`"${val.replace(/"/g, '""')}"`); // Escaped String
+                rowData.push(`"${val.replace(/"/g, '""')}"`);
             }
             cellIndex++;
         }
