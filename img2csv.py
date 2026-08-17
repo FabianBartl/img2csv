@@ -1,5 +1,5 @@
 import base64
-
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 import io
 import json
@@ -18,6 +18,9 @@ CORS(app)
 
 TRAINING_DIR = os.path.join(os.getcwd(), 'training_data')
 os.makedirs(TRAINING_DIR, exist_ok=True)
+
+# Dynamically allocate (Total Cores - 1) workers for parallel cell processing
+MAX_WORKERS = max(1, (os.cpu_count() or 4) - 1)
 
 
 def preprocess_cell_image(cropped_pil_img):
@@ -54,6 +57,45 @@ def preprocess_cell_image(cropped_pil_img):
   return cleaned_pil
 
 
+def process_single_cell(cell, img, custom_config):
+  """Worker function to process OCR for a single table cell."""
+  left = max(0, int(cell['x']))
+  top = max(0, int(cell['y']))
+  right = min(img.width, int(cell['x'] + cell['width']))
+  bottom = min(img.height, int(cell['y'] + cell['height']))
+
+  if right > left + 4 and bottom > top + 4:
+    cropped_img = img.crop((left, top, right, bottom))
+    processed_img = preprocess_cell_image(cropped_img)
+
+    data_dict = pytesseract.image_to_data(
+        processed_img, config=custom_config, output_type=pytesseract.Output.DICT
+    )
+
+    n_boxes = len(data_dict['text'])
+    recognized_texts = []
+    confidences = []
+
+    for i in range(n_boxes):
+      word = data_dict['text'][i].strip()
+      conf = int(data_dict['conf'][i])
+      if word:
+        recognized_texts.append(word)
+        if conf != -1:
+          confidences.append(conf)
+
+    text = ' '.join(recognized_texts)
+    avg_conf = int(sum(confidences) / len(confidences)) if confidences else 100
+
+    text = re.sub(r'^[_\-\s]+|[_\-\s]+$', '', text)
+    text = re.sub(r'_{2,}', '', text)
+  else:
+    text = ''
+    avg_conf = 100
+
+  return {'id': cell['id'], 'text': text, 'confidence': avg_conf}
+
+
 @app.route('/')
 def index():
   return render_template('index.html')
@@ -67,46 +109,17 @@ def run_ocr():
 
   image_bytes = base64.b64decode(image_data)
   img = Image.open(io.BytesIO(image_bytes))
+  img.load()  # Fully load pixel data into memory for thread safety
 
-  results = []
   custom_config = r'--oem 3 --psm 6 -c preserve_interword_spaces=1'
 
-  for cell in cells:
-    left = max(0, int(cell['x']))
-    top = max(0, int(cell['y']))
-    right = min(img.width, int(cell['x'] + cell['width']))
-    bottom = min(img.height, int(cell['y'] + cell['height']))
-
-    if right > left + 4 and bottom > top + 4:
-      cropped_img = img.crop((left, top, right, bottom))
-      processed_img = preprocess_cell_image(cropped_img)
-
-      data_dict = pytesseract.image_to_data(
-          processed_img, config=custom_config, output_type=pytesseract.Output.DICT
-      )
-
-      n_boxes = len(data_dict['text'])
-      recognized_texts = []
-      confidences = []
-
-      for i in range(n_boxes):
-        word = data_dict['text'][i].strip()
-        conf = int(data_dict['conf'][i])
-        if word:
-          recognized_texts.append(word)
-          if conf != -1:
-            confidences.append(conf)
-
-      text = ' '.join(recognized_texts)
-      avg_conf = int(sum(confidences) / len(confidences)) if confidences else 100
-
-      text = re.sub(r'^[_\-\s]+|[_\-\s]+$', '', text)
-      text = re.sub(r'_{2,}', '', text)
-    else:
-      text = ''
-      avg_conf = 100
-
-    results.append({'id': cell['id'], 'text': text, 'confidence': avg_conf})
+  # Run OCR in parallel across N-1 CPU cores while maintaining order
+  with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+    results = list(
+        executor.map(
+            lambda cell: process_single_cell(cell, img, custom_config), cells
+        )
+    )
 
   return jsonify({'results': results})
 
@@ -148,4 +161,4 @@ def save_training_data():
 
 if __name__ == '__main__':
   app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # Max 16MB per request
-  app.run(debug=False, port=5000, host="0.0.0.0")
+  app.run(debug=False, port=5000, host='0.0.0.0')
