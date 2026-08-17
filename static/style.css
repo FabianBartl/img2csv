@@ -420,32 +420,39 @@ input:checked + .slider:before {
 
 .strip-canvas-container {
     height: 60px;
-    background: #000;
-    border: 1px solid #ccc;
+    background: #f6f8fa;
+    border: 1px solid #d0d7de;
     display: flex;
     align-items: center;
     overflow: hidden;
     padding: 2px;
     box-sizing: border-box;
+    border-radius: 4px;
 }
 
-/* Inspection Canvas Image + Status Colored Borders matching Table Cell Markings */
+/* Inspection Canvas Image + Status Colored Borders */
 #strip-canvas {
     height: 100%;
     display: block;
     box-sizing: border-box;
-    border: 2px solid transparent;
+    border: 2px solid #1f883d;
+    box-shadow: 0 0 6px rgba(31, 136, 61, 0.4);
     transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+#strip-canvas.confidence-high {
+    border: 2px solid #1f883d !important; /* Green */
+    box-shadow: 0 0 6px rgba(31, 136, 61, 0.5);
+}
+
+#strip-canvas.confidence-medium {
+    border: 2px solid #d97706 !important; /* Orange */
+    box-shadow: 0 0 6px rgba(217, 119, 6, 0.5);
 }
 
 #strip-canvas.confidence-low {
     border: 2px solid #cf222e !important; /* Red */
     box-shadow: 0 0 6px rgba(207, 34, 46, 0.5);
-}
-
-#strip-canvas.confidence-medium {
-    border: 2px solid #d97706 !important; /* Amber */
-    box-shadow: 0 0 6px rgba(217, 119, 6, 0.5);
 }
 
 #strip-canvas.cell-edited {

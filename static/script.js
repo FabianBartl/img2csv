@@ -617,17 +617,19 @@ function toggleFreeze(freezeState) {
 function updateStripCanvasMarking(index) {
     if (!stripCanvas) return;
 
-    stripCanvas.classList.remove('cell-edited', 'confidence-low', 'confidence-medium');
+    stripCanvas.classList.remove('cell-edited', 'confidence-low', 'confidence-medium', 'confidence-high');
 
     if (index === null || index === undefined || !cellsMetadata[index]) return;
 
     const meta = cellsMetadata[index];
     if (meta.isEdited) {
-        stripCanvas.classList.add('cell-edited');
+        stripCanvas.classList.add('cell-edited');       // Purple
     } else if (meta.confidence < 70) {
-        stripCanvas.classList.add('confidence-low');
+        stripCanvas.classList.add('confidence-low');     // Red
     } else if (meta.confidence < 90) {
-        stripCanvas.classList.add('confidence-medium');
+        stripCanvas.classList.add('confidence-medium');  // Orange
+    } else {
+        stripCanvas.classList.add('confidence-high');    // Green
     }
 }
 
