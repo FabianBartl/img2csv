@@ -30,6 +30,14 @@ const stripMeta = document.getElementById('strip-meta');
 const rowsInput = document.getElementById('rows-input');
 const colsInput = document.getElementById('cols-input');
 
+// Prevent accidental tab closure or refresh
+window.addEventListener('beforeunload', (e) => {
+    if (sourceImage.src || gridContainer.style.display !== 'none') {
+        e.preventDefault();
+        e.returnValue = '';
+    }
+});
+
 rowsInput.addEventListener('change', () => { 
     if (gridContainer.style.display !== 'none') { 
         initProportionalGrid(); 
@@ -53,7 +61,18 @@ imageInput.addEventListener('change', function(e) {
         reader.onload = function(event) {
             sourceImage.src = event.target.result;
             sourceImage.style.display = 'block';
-            resetTable();
+
+            // Preserve table layout if one exists, reset cell content for the new image
+            if (gridContainer.style.display !== 'none' && colPositions.length > 0) {
+                cellsMetadata = [];
+                activeCellIndex = null;
+                inspectionStrip.classList.remove('active');
+                document.querySelectorAll('.cell-text').forEach(el => el.innerText = '');
+                renderGrid();
+                updateUIState(true);
+            } else {
+                resetTable();
+            }
         };
         reader.readAsDataURL(file);
     }
@@ -229,6 +248,13 @@ function renderGrid() {
             if (oldTexts[cellIndex]) {
                 textDiv.innerText = oldTexts[cellIndex];
             }
+
+            textDiv.addEventListener('input', () => {
+                if (isFrozen) {
+                    updateActiveCellText(textDiv.innerText);
+                    stripInput.value = textDiv.innerText;
+                }
+            });
 
             if (isFrozen && cellsMetadata[cellIndex]) {
                 const conf = cellsMetadata[cellIndex].confidence;
@@ -515,7 +541,6 @@ function setActiveCell(index) {
     const cells = document.querySelectorAll('.grid-cell');
     if (!cells[index]) return;
 
-    // Remove active class from previous active cell
     if (activeCellIndex !== null && cells[activeCellIndex]) {
         cells[activeCellIndex].classList.remove('active-cell');
     }
@@ -529,14 +554,15 @@ function setActiveCell(index) {
     const textVal = cells[index].querySelector('.cell-text').innerText;
     const conf = cellsMetadata[index] ? cellsMetadata[index].confidence : 100;
 
-    stripMeta.innerText = `Row ${r}, Col ${c} (Confidence: ${conf}%)`;
-    stripInput.value = textVal;
+    if (stripMeta) stripMeta.innerText = `Row ${r}, Col ${c} (Confidence: ${conf}%)`;
+    if (stripInput) stripInput.value = textVal;
 
     drawInspectionCrop(index);
 
-    // Focus input and select text for rapid editing
-    stripInput.focus();
-    stripInput.select();
+    if (stripInput) {
+        stripInput.focus();
+        stripInput.select();
+    }
 }
 
 function drawInspectionCrop(index) {
@@ -564,7 +590,10 @@ function updateActiveCellText(newVal) {
     const cells = document.querySelectorAll('.grid-cell');
     if (!cells[activeCellIndex]) return;
 
-    cells[activeCellIndex].querySelector('.cell-text').innerText = newVal;
+    const cellTextEl = cells[activeCellIndex].querySelector('.cell-text');
+    if (cellTextEl.innerText !== newVal) {
+        cellTextEl.innerText = newVal;
+    }
 
     if (!cellsMetadata[activeCellIndex]) {
         cellsMetadata[activeCellIndex] = { confidence: 100, originalText: '', isEdited: true };
@@ -583,7 +612,10 @@ function updateActiveCellText(newVal) {
     }
 }
 
-/* Keyboard Navigation Listener for Inspection */
+stripInput.addEventListener('input', (e) => {
+    updateActiveCellText(e.target.value);
+});
+
 document.addEventListener('keydown', (e) => {
     if (!isFrozen || activeCellIndex === null) return;
 
@@ -591,23 +623,17 @@ document.addEventListener('keydown', (e) => {
     const rows = rowPositions.length - 1;
     const total = cols * rows;
 
-    if (e.target === stripInput) {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            const nextIdx = activeCellIndex + cols;
-            if (nextIdx < total) setActiveCell(nextIdx);
-        } else if (e.key === 'Tab') {
-            e.preventDefault();
-            const nextIdx = e.shiftKey ? activeCellIndex - 1 : activeCellIndex + 1;
-            if (nextIdx >= 0 && nextIdx < total) setActiveCell(nextIdx);
-        } else if (e.key === 'ArrowUp') {
-            e.preventDefault();
-            const nextIdx = activeCellIndex - cols;
-            if (nextIdx >= 0) setActiveCell(nextIdx);
-        } else if (e.key === 'ArrowDown') {
-            e.preventDefault();
-            const nextIdx = activeCellIndex + cols;
-            if (nextIdx < total) setActiveCell(nextIdx);
+    if (e.key === 'Tab') {
+        e.preventDefault();
+        const nextIdx = e.shiftKey ? activeCellIndex - 1 : activeCellIndex + 1;
+        if (nextIdx >= 0 && nextIdx < total) {
+            setActiveCell(nextIdx);
+        }
+    } else if (e.key === 'Enter') {
+        e.preventDefault();
+        const nextIdx = e.shiftKey ? activeCellIndex - cols : activeCellIndex + cols;
+        if (nextIdx >= 0 && nextIdx < total) {
+            setActiveCell(nextIdx);
         }
     }
 });

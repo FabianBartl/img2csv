@@ -356,7 +356,7 @@ input:checked + .slider:before {
 }
 
 .frozen .grid-cell {
-    border-color: rgba(0, 200, 0, 0.5);
+    border-color: rgba(0, 200, 0, 0.5); /* 1px normal layout line */
 }
 
 .frozen .cell-text {
@@ -372,7 +372,7 @@ input:checked + .slider:before {
     display: none !important;
 }
 
-/* OCR Confidence Inset Outlines */
+/* OCR Confidence & Edited Inset Outlines (2px = double 1px layout line) */
 .confidence-medium {
     box-shadow: inset 0 0 0 2px #d97706 !important; /* Amber */
 }
@@ -381,15 +381,14 @@ input:checked + .slider:before {
     box-shadow: inset 0 0 0 2px #cf222e !important; /* Red */
 }
 
-/* Manuell editierte Zelle (Violetter Rahmen) */
 .cell-edited {
     box-shadow: inset 0 0 0 2px #7c3aed !important; /* Purple */
 }
 
-/* Aktive gewählte Zelle (Prominenter blauer Rahmen über den grünen Boxen) */
+/* Selected Active Cell (2px Blue Outline, stays above base layout) */
 .grid-cell.active-cell {
-    outline: 3px solid #0969da !important;
-    outline-offset: -3px;
+    outline: 2px solid #0969da !important;
+    outline-offset: -2px;
     z-index: 20 !important;
 }
 
