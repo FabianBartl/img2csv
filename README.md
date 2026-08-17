@@ -1,72 +1,186 @@
-# Table OCR
+# img2csv
 
-Turn a scanned/photographed table into machine-readable data — with a GUI where
-*you* define the grid (no auto-detection guessing), then OCR fills it in and
-you correct it in place before exporting to CSV.
+An interactive web application for grid table detection, manual cell adjustment, OCR extraction, CSV export, and automated server-side fine-training dataset collection.
 
-## How it works
+---
 
-1. **Upload** an image of a table (drag & drop or click to choose).
-2. **Draw the table area**: click-drag over the table like a crop tool. A
-   default 3x3 grid drops onto the area you selected.
-3. **Adjust the grid**: use the Rows/Cols +/− steppers to match your table,
-   drag any line to fine-tune its position (double-click a line to delete it),
-   drag an edge to resize the whole area, or drag inside the area to move it.
-4. **Run OCR**: each cell is cropped out of the original image and OCR'd
-   individually with Tesseract (much more accurate than OCR-ing the whole
-   table as one block).
-5. **Edit**: the recognized text appears in editable boxes, still positioned
-   exactly over each cell, with the grid lines still visible — the overlay is
-   semi-transparent by default so you can compare the text against the
-   original scan underneath. Click into any box and fix what OCR got wrong.
-   Use the "Overlay opacity" slider to see more or less of the image through
-   the text.
-6. **Export CSV**.
+## System Requirements
 
-Moving/resizing the grid after OCR keeps your edits as long as the number of
-rows/columns doesn't change — repositioning just follows along. Adding or
-removing a row/column line clears the affected results since the cell layout
-changed; re-run OCR to refill.
+* **Python:** 3.10 or higher
+* **OCR Engine:** Tesseract OCR (v4.0+)
+* **Dependencies:** OpenCV, PyTesseract, Flask, Flask-CORS, Pillow, Gunicorn
 
-## Setup
+---
 
-You need Python 3.9+ and the Tesseract OCR engine installed on your system.
+## Local Installation & Development (Ubuntu)
 
-**Install Tesseract:**
-- macOS: `brew install tesseract`
-- Ubuntu/Debian: `sudo apt-get install tesseract-ocr`
-- Windows: install from https://github.com/UB-Mannheim/tesseract/wiki and
-  make sure `tesseract.exe` is on your `PATH` (or set
-  `pytesseract.pytesseract.tesseract_cmd` at the top of `app.py`).
+### 1. Install System Dependencies
 
-**Install Python dependencies:**
 ```bash
+sudo apt update
+sudo apt install -y python3 python3-pip python3-venv tesseract-ocr tesseract-ocr-eng libgl1
+```
+
+### 2. Set Up Application Directory & Virtual Environment
+
+```bash
+git clone <your-repository-url> ~/img2csv
+cd ~/img2csv
+
+python3 -m venv venv
+source venv/bin/activate
+pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-## Run
+### 3. Run Development Server
 
 ```bash
-python app.py
+python3 app.py
 ```
 
-Then open **http://127.0.0.1:5000** in your browser.
+Access the application at `http://localhost:5000`.
 
-Everything runs locally — the image is saved to the `uploads/` folder next to
-`app.py` and never leaves your machine.
+---
 
-## Notes / tips
+## Production Deployment (Alpine Linux)
 
-- For best OCR accuracy, add row/column lines so each cell contains just one
-  value — don't try to make Tesseract read a whole row at once.
-- If a column consistently misreads (e.g. digits vs letters confused), you can
-  tighten that column's crop slightly by dragging its edges, or just correct
-  it by hand in the overlay field — it's saved as typed.
-- Multi-language documents: change the `lang` used by Tesseract by editing the
-  `pytesseract.image_to_string(crop, config=config)` call in `app.py`, e.g.
-  add `lang="deu"` for German (requires the matching Tesseract language pack
-  to be installed).
-- The grid you draw is remembered only for the current image/session (kept in
-  the browser tab). If you have many similar-layout scans, add a "save/load
-  grid" feature by serializing `colLines`/`rowLines` to JSON — happy to add
-  that if useful.
+### 1. Install System Packages
+
+Alpine uses `musl` libc. Install system dependencies and native OpenCV via `apk`:
+
+```bash
+apk add python3 py3-pip py3-opencv tesseract-ocr tesseract-ocr-data-eng gunicorn nginx wget
+```
+
+### 2. Set Up Virtual Environment with System Site Packages
+
+Because `opencv-python` can be difficult to compile on Alpine, configure the virtual environment to inherit Alpine's system-installed `py3-opencv`:
+
+```bash
+cd ~/img2csv
+python3 -m venv venv
+
+# Grant virtual environment access to system OpenCV (py3-opencv)
+sed -i 's/include-system-site-packages = false/include-system-site-packages = true/' venv/pyvenv.cfg
+
+# Install remaining requirements using a custom temp dir (prevents tmpfs out-of-memory errors)
+mkdir -p ~/tmp
+TMPDIR=~/tmp venv/bin/pip install --no-cache-dir -r requirements.txt
+```
+
+### 3. Create Deployment Script (`restart.sh`)
+
+Create `restart.sh` inside `~/img2csv`:
+
+```sh
+#!/bin/sh
+pkill gunicorn || true
+
+# Ensure log directory exists
+mkdir -p /var/log/img2csv
+
+# Start Gunicorn daemon using venv binary and unprivileged execution
+~/img2csv/venv/bin/gunicorn --daemon \
+    --workers 5 \
+    --timeout 300 \
+    --bind 0.0.0.0:5000 \
+    --user nobody \
+    --group nogroup \
+    --chdir ~/img2csv \
+    --access-logfile /var/log/img2csv/access.log \
+    --error-logfile /var/log/img2csv/error.log \
+    img2csv:app
+
+tail -f /var/log/img2csv/error.log
+```
+
+Make the script executable:
+
+```bash
+chmod +x ~/img2csv/restart.sh
+```
+
+### 4. Enable Autostart on Reboot (OpenRC)
+
+Create `/etc/local.d/img2csv.start`:
+
+```sh
+#!/bin/sh
+~/img2csv/restart.sh
+```
+
+Make it executable and enable the `local` service:
+
+```bash
+chmod +x /etc/local.d/img2csv.start
+rc-update add local default
+```
+
+### 5. Configure Nginx Reverse Proxy
+
+Create `/etc/nginx/http.d/img2csv.conf`:
+
+```nginx
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    server_name your-domain.com;
+
+    # Important: Base64 image payloads require a higher body size limit
+    client_max_body_size 50M;
+
+    # SSL configuration
+    ssl_certificate /etc/ssl/certs/your_cert.pem;
+    ssl_certificate_key /etc/ssl/private/your_key.pem;
+
+    # Performance buffers
+    proxy_request_buffering off;
+    proxy_buffering off;
+    client_body_buffer_size 1024k;
+
+    location / {
+        proxy_pass [http://127.0.0.1:8080](http://127.0.0.1:8080);
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        proxy_read_timeout 300s;
+        proxy_connect_timeout 300s;
+    }
+}
+```
+
+Reload Nginx:
+
+```bash
+nginx -s reload
+```
+
+---
+
+## Troubleshooting Accuracy & Tesseract Models
+
+### Issue: Poor OCR Accuracy on Alpine Linux
+If OCR performance and confidence levels on the server are noticeably worse than on a local workstation, the server is likely using `tessdata_fast`.
+
+Alpine's default `tesseract-ocr-data-eng` package installs `tessdata_fast`, a heavily pruned model optimized for low memory usage that performs poorly on small table cell crops.
+
+### Solution: Upgrade to `tessdata_best`
+
+Replace the lightweight language model with the high-accuracy model:
+
+```bash
+# Download tessdata_best to system tesseract folder
+wget [https://github.com/tesseract-ocr/tessdata_best/raw/main/eng.traineddata](https://github.com/tesseract-ocr/tessdata_best/raw/main/eng.traineddata) -O /usr/share/tessdata/eng.traineddata
+
+# Ensure environment variable points to the directory
+export TESSDATA_PREFIX=/usr/share/tessdata
+```
+
+Restart Gunicorn after replacing the file:
+
+```bash
+~/img2csv/restart.sh
+```

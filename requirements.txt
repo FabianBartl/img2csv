@@ -2,4 +2,5 @@ flask
 flask-cors
 pytesseract
 pillow
-opencv-python
+gunicorn
+opencv-python-headless
