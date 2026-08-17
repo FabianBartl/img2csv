@@ -17,9 +17,6 @@ const imageInput = document.getElementById('image-upload');
 const sourceImage = document.getElementById('source-image');
 const drawLayer = document.getElementById('draw-layer');
 const gridContainer = document.getElementById('grid-container');
-const cellsLayer = document.getElementById('cells-layer');
-const colHandlesDiv = document.getElementById('col-handles');
-const rowHandlesDiv = document.getElementById('row-handles');
 const opacitySlider = document.getElementById('opacity-slider');
 const flickerToggle = document.getElementById('flicker-toggle');
 const inspectionStrip = document.getElementById('inspection-strip');
@@ -30,53 +27,59 @@ const stripMeta = document.getElementById('strip-meta');
 const rowsInput = document.getElementById('rows-input');
 const colsInput = document.getElementById('cols-input');
 
-// Prevent accidental tab closure or refresh
+// Warn before accidental leave
 window.addEventListener('beforeunload', (e) => {
-    if (sourceImage.src || gridContainer.style.display !== 'none') {
+    if (sourceImage && sourceImage.src) {
         e.preventDefault();
         e.returnValue = '';
     }
 });
 
-rowsInput.addEventListener('change', () => { 
-    if (gridContainer.style.display !== 'none') { 
-        initProportionalGrid(); 
-        renderGrid(); 
-    }
-});
+if (rowsInput) {
+    rowsInput.addEventListener('change', () => { 
+        if (gridContainer.style.display !== 'none') { 
+            initProportionalGrid(); 
+            renderGrid(); 
+        }
+    });
+}
 
-colsInput.addEventListener('change', () => { 
-    if (gridContainer.style.display !== 'none') { 
-        initProportionalGrid(); 
-        renderGrid(); 
-    }
-});
+if (colsInput) {
+    colsInput.addEventListener('change', () => { 
+        if (gridContainer.style.display !== 'none') { 
+            initProportionalGrid(); 
+            renderGrid(); 
+        }
+    });
+}
 
 updateUIState(false);
 
-imageInput.addEventListener('change', function(e) {
-    const file = e.target.files[0];
-    if (file) {
-        const reader = new FileReader();
-        reader.onload = function(event) {
-            sourceImage.src = event.target.result;
-            sourceImage.style.display = 'block';
+if (imageInput) {
+    imageInput.addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                sourceImage.src = event.target.result;
+                sourceImage.style.display = 'block';
 
-            // Preserve table layout if one exists, reset cell content for the new image
-            if (gridContainer.style.display !== 'none' && colPositions.length > 0) {
-                cellsMetadata = [];
-                activeCellIndex = null;
-                inspectionStrip.classList.remove('active');
-                document.querySelectorAll('.cell-text').forEach(el => el.innerText = '');
-                renderGrid();
-                updateUIState(true);
-            } else {
-                resetTable();
-            }
-        };
-        reader.readAsDataURL(file);
-    }
-});
+                if (gridContainer.style.display !== 'none' && colPositions.length > 0) {
+                    cellsMetadata = [];
+                    activeCellIndex = null;
+                    if (inspectionStrip) inspectionStrip.classList.remove('active');
+                    updateStripCanvasMarking(null);
+                    document.querySelectorAll('.cell-text').forEach(el => el.innerText = '');
+                    renderGrid();
+                    updateUIState(true);
+                } else {
+                    resetTable();
+                }
+            };
+            reader.readAsDataURL(file);
+        }
+    });
+}
 
 function resetTable() {
     stopFlicker();
@@ -84,20 +87,31 @@ function resetTable() {
     isFlickerEnabled = false;
 
     gridContainer.style.display = 'none';
-    cellsLayer.innerHTML = '';
-    colHandlesDiv.innerHTML = '';
-    rowHandlesDiv.innerHTML = '';
-    inspectionStrip.classList.remove('active');
+    const cellsLayer = document.getElementById('cells-layer');
+    const colHandlesDiv = document.getElementById('col-handles');
+    const rowHandlesDiv = document.getElementById('row-handles');
+    if (cellsLayer) cellsLayer.innerHTML = '';
+    if (colHandlesDiv) colHandlesDiv.innerHTML = '';
+    if (rowHandlesDiv) rowHandlesDiv.innerHTML = '';
+
+    if (inspectionStrip) inspectionStrip.classList.remove('active');
+    updateStripCanvasMarking(null);
     activeCellIndex = null;
     cellsMetadata = [];
     updateUIState(false);
 }
 
 function updateUIState(hasTable) {
-    document.getElementById('btn-ocr').disabled = !hasTable;
-    document.getElementById('btn-csv').disabled = !hasTable;
-    document.getElementById('btn-clear').disabled = !hasTable;
-    document.getElementById('freeze-toggle').disabled = !hasTable;
+    const btnOcr = document.getElementById('btn-ocr');
+    const btnCsv = document.getElementById('btn-csv');
+    const btnClear = document.getElementById('btn-clear');
+    const freezeToggle = document.getElementById('freeze-toggle');
+
+    if (btnOcr) btnOcr.disabled = !hasTable;
+    if (btnCsv) btnCsv.disabled = !hasTable;
+    if (btnClear) btnClear.disabled = !hasTable;
+    if (freezeToggle) freezeToggle.disabled = !hasTable;
+
     if (!hasTable) {
         toggleFreeze(false);
     }
@@ -108,7 +122,7 @@ function updateTextColor(color) {
 }
 
 function updateOpacity(val) {
-    if (!isFlickerEnabled) {
+    if (!isFlickerEnabled && gridContainer) {
         gridContainer.style.opacity = val;
     }
 }
@@ -123,7 +137,7 @@ function toggleFlicker(enabled) {
 }
 
 function updateFlickerSpeed(val) {
-    flickerHz = parseInt(val);
+    flickerHz = parseInt(val) || 4;
     if (isFlickerEnabled) {
         startFlicker();
     }
@@ -138,7 +152,7 @@ function startFlicker() {
 
     flickerInterval = setInterval(() => {
         showGrid = !showGrid;
-        const baseOpacity = parseFloat(opacitySlider.value) || 1;
+        const baseOpacity = opacitySlider ? parseFloat(opacitySlider.value) : 1;
         gridContainer.style.opacity = showGrid ? baseOpacity : '0';
     }, intervalMs);
 }
@@ -148,18 +162,39 @@ function stopFlicker() {
         clearInterval(flickerInterval);
         flickerInterval = null;
     }
-    gridContainer.style.opacity = opacitySlider.value;
+    if (gridContainer && opacitySlider) {
+        gridContainer.style.opacity = opacitySlider.value;
+    }
 }
 
 function clearTexts() { 
+    if (gridContainer.style.display === 'none') return;
+    if (!confirm('Are you sure you want to clear all cell text?')) return;
+
+    cellsMetadata = []; 
+    activeCellIndex = null;
+
     document.querySelectorAll('.cell-text').forEach(el => el.innerText = ''); 
-    cellsMetadata.forEach(meta => meta.isEdited = true);
+    document.querySelectorAll('.grid-cell').forEach(cell => {
+        cell.classList.remove('cell-edited', 'confidence-low', 'confidence-medium', 'active-cell');
+    });
+
+    if (stripInput) stripInput.value = '';
+    if (stripMeta) stripMeta.innerText = '';
+    updateStripCanvasMarking(null);
+
     renderGrid();
 }
 
 function startDrawing() {
-    if (!sourceImage.src) return alert('Please load an image first!');
+    if (!sourceImage || !sourceImage.src) return alert('Please load an image first!');
     
+    if (gridContainer.style.display !== 'none') {
+        if (!confirm('A table layout already exists. Are you sure you want to replace it?')) {
+            return;
+        }
+    }
+
     stopFlicker();
     if (flickerToggle) flickerToggle.checked = false;
     isFlickerEnabled = false;
@@ -169,53 +204,55 @@ function startDrawing() {
     gridContainer.style.display = 'none';
 }
 
-drawLayer.addEventListener('mousedown', (e) => {
-    isDrawing = true;
-    const rect = drawLayer.getBoundingClientRect();
-    startX = e.clientX - rect.left;
-    startY = e.clientY - rect.top;
-    tableRect = { x: startX, y: startY, w: 0, h: 0 };
-    initProportionalGrid();
+if (drawLayer) {
+    drawLayer.addEventListener('mousedown', (e) => {
+        isDrawing = true;
+        const rect = drawLayer.getBoundingClientRect();
+        startX = e.clientX - rect.left;
+        startY = e.clientY - rect.top;
+        tableRect = { x: startX, y: startY, w: 0, h: 0 };
+        initProportionalGrid();
 
-    gridContainer.style.left = startX + 'px';
-    gridContainer.style.top = startY + 'px';
-    gridContainer.style.width = '0px';
-    gridContainer.style.height = '0px';
-    gridContainer.style.display = 'block';
-});
+        gridContainer.style.left = startX + 'px';
+        gridContainer.style.top = startY + 'px';
+        gridContainer.style.width = '0px';
+        gridContainer.style.height = '0px';
+        gridContainer.style.display = 'block';
+    });
 
-drawLayer.addEventListener('mousemove', (e) => {
-    if (!isDrawing) return;
-    const rect = drawLayer.getBoundingClientRect();
-    const currentX = e.clientX - rect.left;
-    const currentY = e.clientY - rect.top;
-    
-    tableRect.w = Math.abs(currentX - startX);
-    tableRect.h = Math.abs(currentY - startY);
-    tableRect.x = currentX < startX ? currentX : startX;
-    tableRect.y = currentY < startY ? currentY : startY;
+    drawLayer.addEventListener('mousemove', (e) => {
+        if (!isDrawing) return;
+        const rect = drawLayer.getBoundingClientRect();
+        const currentX = e.clientX - rect.left;
+        const currentY = e.clientY - rect.top;
+        
+        tableRect.w = Math.abs(currentX - startX);
+        tableRect.h = Math.abs(currentY - startY);
+        tableRect.x = currentX < startX ? currentX : startX;
+        tableRect.y = currentY < startY ? currentY : startY;
 
-    gridContainer.style.left = tableRect.x + 'px';
-    gridContainer.style.top = tableRect.y + 'px';
-    gridContainer.style.width = tableRect.w + 'px';
-    gridContainer.style.height = tableRect.h + 'px';
-    renderGrid();
-});
+        gridContainer.style.left = tableRect.x + 'px';
+        gridContainer.style.top = tableRect.y + 'px';
+        gridContainer.style.width = tableRect.w + 'px';
+        gridContainer.style.height = tableRect.h + 'px';
+        renderGrid();
+    });
 
-drawLayer.addEventListener('mouseup', () => {
-    if (!isDrawing) return;
-    isDrawing = false;
-    drawLayer.style.display = 'none';
-    if (tableRect.w > 20 && tableRect.h > 20) { 
-        updateUIState(true); 
-    } else { 
-        resetTable(); 
-    }
-});
+    drawLayer.addEventListener('mouseup', () => {
+        if (!isDrawing) return;
+        isDrawing = false;
+        drawLayer.style.display = 'none';
+        if (tableRect.w > 20 && tableRect.h > 20) { 
+            updateUIState(true); 
+        } else { 
+            resetTable(); 
+        }
+    });
+}
 
 function initProportionalGrid() {
-    const rows = parseInt(rowsInput.value);
-    const cols = parseInt(colsInput.value);
+    const rows = parseInt(rowsInput ? rowsInput.value : 5);
+    const cols = parseInt(colsInput ? colsInput.value : 5);
     colPositions = []; 
     rowPositions = [];
     for (let c = 0; c <= cols; c++) colPositions.push(c / cols);
@@ -225,9 +262,14 @@ function initProportionalGrid() {
 function renderGrid() {
     const oldTexts = Array.from(document.querySelectorAll('.cell-text')).map(el => el.innerText);
 
-    cellsLayer.innerHTML = '';
-    colHandlesDiv.innerHTML = '';
-    rowHandlesDiv.innerHTML = '';
+    const cellsLayer = document.getElementById('cells-layer') || gridContainer;
+    const colHandlesDiv = document.getElementById('col-handles') || gridContainer;
+    const rowHandlesDiv = document.getElementById('row-handles') || gridContainer;
+
+    // Clear previous dynamic elements if designated containers exist
+    if (document.getElementById('cells-layer')) cellsLayer.innerHTML = '';
+    if (document.getElementById('col-handles')) colHandlesDiv.innerHTML = '';
+    if (document.getElementById('row-handles')) rowHandlesDiv.innerHTML = '';
 
     const cols = colPositions.length - 1;
     const rows = rowPositions.length - 1;
@@ -244,7 +286,7 @@ function renderGrid() {
 
             const textDiv = document.createElement('div');
             textDiv.className = 'cell-text';
-            textDiv.contentEditable = true;
+            textDiv.contentEditable = isFrozen;
             if (oldTexts[cellIndex]) {
                 textDiv.innerText = oldTexts[cellIndex];
             }
@@ -252,7 +294,7 @@ function renderGrid() {
             textDiv.addEventListener('input', () => {
                 if (isFrozen) {
                     updateActiveCellText(textDiv.innerText);
-                    stripInput.value = textDiv.innerText;
+                    if (stripInput) stripInput.value = textDiv.innerText;
                 }
             });
 
@@ -280,156 +322,172 @@ function renderGrid() {
         }
     }
 
-    for (let c = 1; c < cols; c++) {
-        const handle = document.createElement('div');
-        handle.className = 'col-handle';
-        handle.style.left = (colPositions[c] * tableRect.w) + 'px';
+    if (!isFrozen) {
+        for (let c = 1; c < cols; c++) {
+            const handle = document.createElement('div');
+            handle.className = 'col-handle';
+            handle.style.left = (colPositions[c] * tableRect.w) + 'px';
 
-        const bar = document.createElement('div');
-        bar.className = 'col-handle-bar';
+            const bar = document.createElement('div');
+            bar.className = 'col-handle-bar';
 
-        const delBtn = document.createElement('span'); 
-        delBtn.className = 'handle-del'; 
-        delBtn.innerText = '×';
-        delBtn.onmousedown = (e) => { e.stopPropagation(); deleteCol(c); };
+            const delBtn = document.createElement('span'); 
+            delBtn.className = 'handle-del'; 
+            delBtn.innerText = '×';
+            delBtn.onmousedown = (e) => { e.stopPropagation(); deleteCol(c); };
 
-        handle.appendChild(delBtn);
-        handle.appendChild(bar);
-        attachHandleDrag(handle, 'col', c);
-        colHandlesDiv.appendChild(handle);
-    }
+            handle.appendChild(delBtn);
+            handle.appendChild(bar);
+            attachHandleDrag(handle, 'col', c);
+            colHandlesDiv.appendChild(handle);
+        }
 
-    for (let r = 1; r < rows; r++) {
-        const handle = document.createElement('div');
-        handle.className = 'row-handle';
-        handle.style.top = (rowPositions[r] * tableRect.h) + 'px';
+        for (let r = 1; r < rows; r++) {
+            const handle = document.createElement('div');
+            handle.className = 'row-handle';
+            handle.style.top = (rowPositions[r] * tableRect.h) + 'px';
 
-        const bar = document.createElement('div');
-        bar.className = 'row-handle-bar';
+            const bar = document.createElement('div');
+            bar.className = 'row-handle-bar';
 
-        const delBtn = document.createElement('span'); 
-        delBtn.className = 'handle-del'; 
-        delBtn.innerText = '×';
-        delBtn.onmousedown = (e) => { e.stopPropagation(); deleteRow(r); };
+            const delBtn = document.createElement('span'); 
+            delBtn.className = 'handle-del'; 
+            delBtn.innerText = '×';
+            delBtn.onmousedown = (e) => { e.stopPropagation(); deleteRow(r); };
 
-        handle.appendChild(delBtn);
-        handle.appendChild(bar);
-        attachHandleDrag(handle, 'row', r);
-        rowHandlesDiv.appendChild(handle);
+            handle.appendChild(delBtn);
+            handle.appendChild(bar);
+            attachHandleDrag(handle, 'row', r);
+            rowHandlesDiv.appendChild(handle);
+        }
     }
 }
 
-gridContainer.onmousedown = (e) => {
-    if (isFrozen) return; 
-    e.stopPropagation();
-    const startX = e.clientX - tableRect.x;
-    const startY = e.clientY - tableRect.y;
+if (gridContainer) {
+    gridContainer.onmousedown = (e) => {
+        if (isFrozen || e.target.classList.contains('corner-resize') || e.target.classList.contains('col-handle') || e.target.classList.contains('row-handle')) return; 
+        e.stopPropagation();
+        const startMouseX = e.clientX - tableRect.x;
+        const startMouseY = e.clientY - tableRect.y;
 
-    const onMouseMove = (moveEvent) => {
-        tableRect.x = moveEvent.clientX - startX;
-        tableRect.y = moveEvent.clientY - startY;
-        gridContainer.style.left = tableRect.x + 'px';
-        gridContainer.style.top = tableRect.y + 'px';
+        const onMouseMove = (moveEvent) => {
+            tableRect.x = moveEvent.clientX - startMouseX;
+            tableRect.y = moveEvent.clientY - startMouseY;
+            gridContainer.style.left = tableRect.x + 'px';
+            gridContainer.style.top = tableRect.y + 'px';
+        };
+
+        const onMouseUp = () => {
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup', onMouseUp);
+        };
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
     };
+}
 
-    const onMouseUp = () => {
-        document.removeEventListener('mousemove', onMouseMove);
-        document.removeEventListener('mouseup', onMouseUp);
+const resizeBr = document.getElementById('resize-br-handle');
+if (resizeBr) {
+    resizeBr.onmousedown = (e) => {
+        e.stopPropagation();
+        const startW = tableRect.w;
+        const startH = tableRect.h;
+        const startX = e.clientX;
+        const startY = e.clientY;
+
+        const onMouseMove = (moveEvent) => {
+            tableRect.w = Math.max(50, startW + (moveEvent.clientX - startX));
+            tableRect.h = Math.max(50, startH + (moveEvent.clientY - startY));
+            gridContainer.style.width = tableRect.w + 'px';
+            gridContainer.style.height = tableRect.h + 'px';
+            renderGrid();
+        };
+
+        const onMouseUp = () => {
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup', onMouseUp);
+        };
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
     };
-    document.addEventListener('mousemove', onMouseMove);
-    document.addEventListener('mouseup', onMouseUp);
-};
+}
 
-document.getElementById('resize-br-handle').onmousedown = (e) => {
-    e.stopPropagation();
-    const startW = tableRect.w;
-    const startH = tableRect.h;
-    const startX = e.clientX;
-    const startY = e.clientY;
+const resizeTl = document.getElementById('resize-tl-handle');
+if (resizeTl) {
+    resizeTl.onmousedown = (e) => {
+        e.stopPropagation();
+        const startW = tableRect.w;
+        const startH = tableRect.h;
+        const startX = e.clientX;
+        const startY = e.clientY;
+        const origX = tableRect.x;
+        const origY = tableRect.y;
 
-    const onMouseMove = (moveEvent) => {
-        tableRect.w = Math.max(50, startW + (moveEvent.clientX - startX));
-        tableRect.h = Math.max(50, startH + (moveEvent.clientY - startY));
+        const onMouseMove = (moveEvent) => {
+            const deltaX = moveEvent.clientX - startX;
+            const deltaY = moveEvent.clientY - startY;
+
+            const newW = Math.max(50, startW - deltaX);
+            const newH = Math.max(50, startH - deltaY);
+
+            tableRect.x = origX + (startW - newW);
+            tableRect.y = origY + (startH - newH);
+            tableRect.w = newW;
+            tableRect.h = newH;
+
+            gridContainer.style.left = tableRect.x + 'px';
+            gridContainer.style.top = tableRect.y + 'px';
+            gridContainer.style.width = tableRect.w + 'px';
+            gridContainer.style.height = tableRect.h + 'px';
+            renderGrid();
+        };
+
+        const onMouseUp = () => {
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup', onMouseUp);
+        };
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
+    };
+}
+
+const addColBtn = document.getElementById('add-col-btn');
+if (addColBtn) {
+    addColBtn.onmousedown = (e) => {
+        e.stopPropagation();
+        const cols = colPositions.length - 1;
+        const avgColW = tableRect.w / cols;
+        tableRect.w += avgColW;
         gridContainer.style.width = tableRect.w + 'px';
-        gridContainer.style.height = tableRect.h + 'px';
+        
+        const oldW = tableRect.w - avgColW;
+        for (let i = 0; i < colPositions.length; i++) {
+            colPositions[i] = (colPositions[i] * oldW) / tableRect.w;
+        }
+        colPositions.push(1.0);
+        if (colsInput) colsInput.value = colPositions.length - 1;
         renderGrid();
     };
+}
 
-    const onMouseUp = () => {
-        document.removeEventListener('mousemove', onMouseMove);
-        document.removeEventListener('mouseup', onMouseUp);
-    };
-    document.addEventListener('mousemove', onMouseMove);
-    document.addEventListener('mouseup', onMouseUp);
-};
-
-document.getElementById('resize-tl-handle').onmousedown = (e) => {
-    e.stopPropagation();
-    const startW = tableRect.w;
-    const startH = tableRect.h;
-    const startX = e.clientX;
-    const startY = e.clientY;
-    const origX = tableRect.x;
-    const origY = tableRect.y;
-
-    const onMouseMove = (moveEvent) => {
-        const deltaX = moveEvent.clientX - startX;
-        const deltaY = moveEvent.clientY - startY;
-
-        const newW = Math.max(50, startW - deltaX);
-        const newH = Math.max(50, startH - deltaY);
-
-        tableRect.x = origX + (startW - newW);
-        tableRect.y = origY + (startH - newH);
-        tableRect.w = newW;
-        tableRect.h = newH;
-
-        gridContainer.style.left = tableRect.x + 'px';
-        gridContainer.style.top = tableRect.y + 'px';
-        gridContainer.style.width = tableRect.w + 'px';
+const addRowBtn = document.getElementById('add-row-btn');
+if (addRowBtn) {
+    addRowBtn.onmousedown = (e) => {
+        e.stopPropagation();
+        const rows = rowPositions.length - 1;
+        const avgRowH = tableRect.h / rows;
+        tableRect.h += avgRowH;
         gridContainer.style.height = tableRect.h + 'px';
+        
+        const oldH = tableRect.h - avgRowH;
+        for (let i = 0; i < rowPositions.length; i++) {
+            rowPositions[i] = (rowPositions[i] * oldH) / tableRect.h;
+        }
+        rowPositions.push(1.0);
+        if (rowsInput) rowsInput.value = rowPositions.length - 1;
         renderGrid();
     };
-
-    const onMouseUp = () => {
-        document.removeEventListener('mousemove', onMouseMove);
-        document.removeEventListener('mouseup', onMouseUp);
-    };
-    document.addEventListener('mousemove', onMouseMove);
-    document.addEventListener('mouseup', onMouseUp);
-};
-
-document.getElementById('add-col-btn').onmousedown = (e) => {
-    e.stopPropagation();
-    const cols = colPositions.length - 1;
-    const avgColW = tableRect.w / cols;
-    tableRect.w += avgColW;
-    gridContainer.style.width = tableRect.w + 'px';
-    
-    const oldW = tableRect.w - avgColW;
-    for (let i = 0; i < colPositions.length; i++) {
-        colPositions[i] = (colPositions[i] * oldW) / tableRect.w;
-    }
-    colPositions.push(1.0);
-    colsInput.value = colPositions.length - 1;
-    renderGrid();
-};
-
-document.getElementById('add-row-btn').onmousedown = (e) => {
-    e.stopPropagation();
-    const rows = rowPositions.length - 1;
-    const avgRowH = tableRect.h / rows;
-    tableRect.h += avgRowH;
-    gridContainer.style.height = tableRect.h + 'px';
-    
-    const oldH = tableRect.h - avgRowH;
-    for (let i = 0; i < rowPositions.length; i++) {
-        rowPositions[i] = (rowPositions[i] * oldH) / tableRect.h;
-    }
-    rowPositions.push(1.0);
-    rowsInput.value = rowPositions.length - 1;
-    renderGrid();
-};
+}
 
 function attachHandleDrag(element, type, index) {
     element.onmousedown = (e) => {
@@ -464,17 +522,30 @@ function attachHandleDrag(element, type, index) {
 
 function deleteCol(index) {
     colPositions.splice(index, 1);
-    colsInput.value = colPositions.length - 1;
+    if (colsInput) colsInput.value = colPositions.length - 1;
     renderGrid();
 }
 
 function deleteRow(index) {
     rowPositions.splice(index, 1);
-    rowsInput.value = rowPositions.length - 1;
+    if (rowsInput) rowsInput.value = rowPositions.length - 1;
     renderGrid();
 }
 
 async function runOCR() {
+    if (cellsMetadata.length > 0) {
+        if (!confirm('OCR has already been run. Are you sure you want to re-run OCR and overwrite current results?')) {
+            return;
+        }
+    }
+
+    cellsMetadata = [];
+    activeCellIndex = null;
+    updateStripCanvasMarking(null);
+    document.querySelectorAll('.grid-cell').forEach(cell => {
+        cell.classList.remove('cell-edited', 'confidence-low', 'confidence-medium', 'active-cell');
+    });
+
     const cellsData = [];
     const cells = document.querySelectorAll('.grid-cell');
     const imgRect = sourceImage.getBoundingClientRect();
@@ -508,7 +579,9 @@ async function runOCR() {
                 originalText: res.text,
                 isEdited: false 
             };
-            cells[res.id].querySelector('.cell-text').innerText = res.text;
+            if (cells[res.id]) {
+                cells[res.id].querySelector('.cell-text').innerText = res.text;
+            }
         });
 
         toggleFreeze(true);
@@ -520,20 +593,41 @@ async function runOCR() {
 
 function toggleFreeze(freezeState) {
     isFrozen = freezeState;
-    document.getElementById('freeze-toggle').checked = freezeState;
-    const ws = document.getElementById('workspace');
+    const freezeToggle = document.getElementById('freeze-toggle');
+    if (freezeToggle) freezeToggle.checked = freezeState;
+    const ws = document.getElementById('workspace') || document.body;
     
     if (isFrozen) {
         ws.classList.add('frozen');
         renderGrid();
-        inspectionStrip.classList.add('active');
+        if (inspectionStrip) inspectionStrip.classList.add('active');
     } else {
         ws.classList.remove('frozen');
-        inspectionStrip.classList.remove('active');
+        if (inspectionStrip) inspectionStrip.classList.remove('active');
         if (activeCellIndex !== null) {
-            const cells = document.querySelectorAll('.grid-cell');
-            if (cells[activeCellIndex]) cells[activeCellIndex].classList.remove('active-cell');
+            activeCellIndex = null;
         }
+        updateStripCanvasMarking(null);
+        document.querySelectorAll('.grid-cell').forEach(cell => {
+            cell.classList.remove('active-cell', 'cell-edited', 'confidence-low', 'confidence-medium');
+        });
+    }
+}
+
+function updateStripCanvasMarking(index) {
+    if (!stripCanvas) return;
+
+    stripCanvas.classList.remove('cell-edited', 'confidence-low', 'confidence-medium');
+
+    if (index === null || index === undefined || !cellsMetadata[index]) return;
+
+    const meta = cellsMetadata[index];
+    if (meta.isEdited) {
+        stripCanvas.classList.add('cell-edited');
+    } else if (meta.confidence < 70) {
+        stripCanvas.classList.add('confidence-low');
+    } else if (meta.confidence < 90) {
+        stripCanvas.classList.add('confidence-medium');
     }
 }
 
@@ -558,6 +652,7 @@ function setActiveCell(index) {
     if (stripInput) stripInput.value = textVal;
 
     drawInspectionCrop(index);
+    updateStripCanvasMarking(index);
 
     if (stripInput) {
         stripInput.focus();
@@ -567,7 +662,7 @@ function setActiveCell(index) {
 
 function drawInspectionCrop(index) {
     const cells = document.querySelectorAll('.grid-cell');
-    if (!cells[index]) return;
+    if (!cells[index] || !stripCanvas || !sourceImage) return;
 
     const cellRect = cells[index].getBoundingClientRect();
     const imgRect = sourceImage.getBoundingClientRect();
@@ -610,11 +705,15 @@ function updateActiveCellText(newVal) {
         if (meta.confidence < 70) cells[activeCellIndex].classList.add('confidence-low');
         else if (meta.confidence < 90) cells[activeCellIndex].classList.add('confidence-medium');
     }
+
+    updateStripCanvasMarking(activeCellIndex);
 }
 
-stripInput.addEventListener('input', (e) => {
-    updateActiveCellText(e.target.value);
-});
+if (stripInput) {
+    stripInput.addEventListener('input', (e) => {
+        updateActiveCellText(e.target.value);
+    });
+}
 
 document.addEventListener('keydown', (e) => {
     if (!isFrozen || activeCellIndex === null) return;
@@ -625,16 +724,37 @@ document.addEventListener('keydown', (e) => {
 
     if (e.key === 'Tab') {
         e.preventDefault();
-        const nextIdx = e.shiftKey ? activeCellIndex - 1 : activeCellIndex + 1;
-        if (nextIdx >= 0 && nextIdx < total) {
-            setActiveCell(nextIdx);
+        let nextIdx;
+        if (e.shiftKey) {
+            nextIdx = activeCellIndex - 1;
+            if (nextIdx < 0) nextIdx = total - 1;
+        } else {
+            nextIdx = activeCellIndex + 1;
+            if (nextIdx >= total) nextIdx = 0;
         }
+        setActiveCell(nextIdx);
     } else if (e.key === 'Enter') {
         e.preventDefault();
-        const nextIdx = e.shiftKey ? activeCellIndex - cols : activeCellIndex + cols;
-        if (nextIdx >= 0 && nextIdx < total) {
-            setActiveCell(nextIdx);
+        const currentR = Math.floor(activeCellIndex / cols);
+        const currentC = activeCellIndex % cols;
+        let nextR, nextC;
+
+        if (e.shiftKey) {
+            nextR = currentR - 1;
+            nextC = currentC;
+            if (nextR < 0) {
+                nextR = rows - 1;
+                nextC = (currentC - 1 + cols) % cols;
+            }
+        } else {
+            nextR = currentR + 1;
+            nextC = currentC;
+            if (nextR >= rows) {
+                nextR = 0;
+                nextC = (currentC + 1) % cols;
+            }
         }
+        setActiveCell(nextR * cols + nextC);
     }
 });
 
@@ -648,7 +768,7 @@ function exportCSV() {
     for (let r = 0; r < rows; r++) {
         let rowData = [];
         for (let c = 0; c < cols; c++) {
-            let val = cells[cellIndex].innerText.trim();
+            let val = cells[cellIndex] ? cells[cellIndex].innerText.trim() : '';
             if (!isNaN(Number(val)) && val !== '') {
                 rowData.push(val);
             } else if (val.toLowerCase() === 'true' || val.toLowerCase() === 'false') {
