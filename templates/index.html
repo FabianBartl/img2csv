@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Table OCR Extractor</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<div class="toolbar">
+    <input type="file" id="image-upload" accept="image/*">
+    <div>
+        Rows: <input type="number" id="rows-input" value="4" min="1">
+        Cols: <input type="number" id="cols-input" value="3" min="1">
+    </div>
+    <button id="btn-draw" onclick="startDrawing()">1. Draw Grid</button>
+    <button id="btn-ocr" onclick="runOCR()">2. Run OCR</button>
+    <button id="btn-freeze" onclick="toggleFreeze()">Toggle Frozen State</button>
+    <button id="btn-csv" onclick="exportCSV()">Export CSV</button>
+    
+    <div>
+        Grid/Text Opacity: 
+        <input type="range" id="opacity-slider" min="0" max="1" step="0.1" value="1" oninput="updateOpacity(this.value)">
+    </div>
+</div>
+
+<div id="workspace">
+    <img id="source-image" src="" style="display:none;">
+    <div id="draw-layer"></div>
+    <div id="grid-container"></div>
+</div>
+
+<script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
