@@ -2,34 +2,63 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Table OCR Extractor</title>
+    <title>Interactive Table OCR Extractor</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
 
 <div class="toolbar">
-    <input type="file" id="image-upload" accept="image/*">
-    <div>
-        Rows: <input type="number" id="rows-input" value="4" min="1">
-        Cols: <input type="number" id="cols-input" value="3" min="1">
+    <div class="tool-group">
+        <label for="image-upload" class="file-label">Choose Image</label>
+        <input type="file" id="image-upload" accept="image/*">
     </div>
-    <button id="btn-draw" onclick="startDrawing()">1. Draw Grid</button>
-    <button id="btn-ocr" onclick="runOCR()">2. Run OCR</button>
-    <button id="btn-freeze" onclick="toggleFreeze()">Toggle Frozen State</button>
-    <button id="btn-csv" onclick="exportCSV()">Export CSV</button>
-    
-    <div>
-        Grid/Text Opacity: 
-        <input type="range" id="opacity-slider" min="0" max="1" step="0.1" value="1" oninput="updateOpacity(this.value)">
+
+    <div class="tool-group">
+        <label>Rows: <input type="number" id="rows-input" value="4" min="1"></label>
+        <label>Cols: <input type="number" id="cols-input" value="3" min="1"></label>
     </div>
+
+    <button id="btn-draw" class="btn primary" onclick="startDrawing()">1. Draw Table</button>
+
+    <div class="tool-group">
+        <label for="text-color">OCR Color:</label>
+        <input type="color" id="text-color" value="#d10000" onchange="updateTextColor(this.value)">
+    </div>
+
+    <button id="btn-ocr" class="btn" onclick="runOCR()" disabled>2. Run OCR</button>
+
+    <div class="tool-group toggle-group">
+        <label class="switch-label">
+            <input type="checkbox" id="freeze-toggle" onchange="toggleFreeze(this.checked)" disabled>
+            <span class="slider"></span>
+            <span id="freeze-text">Frozen Layout</span>
+        </label>
+    </div>
+
+    <div class="tool-group">
+        <label>Opacity: 
+            <input type="range" id="opacity-slider" min="0" max="1" step="0.1" value="1" oninput="updateOpacity(this.value)">
+        </label>
+    </div>
+
+    <button id="btn-csv" class="btn success" onclick="exportCSV()" disabled>Export CSV</button>
 </div>
 
 <div id="workspace">
     <img id="source-image" src="" style="display:none;">
     <div id="draw-layer"></div>
-    <div id="grid-container"></div>
+    
+    <!-- Dynamic Table Overlay Container -->
+    <div id="grid-container">
+        <!-- Handles stick out outside grid bounds -->
+        <div id="move-handle" title="Drag to move entire table">⠿ Move Table</div>
+        <div id="resize-handle" title="Drag to resize entire table"></div>
+        <div id="col-handles"></div>
+        <div id="row-handles"></div>
+        <div id="cells-layer"></div>
+    </div>
 </div>
 
-<script src="{{ url_for('static', filename='app.js') }}"></script>
+<script src="{{ url_for('static', filename='script.js') }}"></script>
 </body>
 </html>

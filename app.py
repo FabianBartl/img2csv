@@ -5,7 +5,6 @@ from PIL import Image
 import io
 import base64
 
-# Flask looks for HTML in 'templates' and CSS/JS in 'static' by default
 app = Flask(__name__, template_folder='templates', static_folder='static')
 CORS(app)
 
@@ -16,26 +15,27 @@ def index():
 @app.route('/ocr', methods=['POST'])
 def run_ocr():
     data = request.json
-    image_data = data['image'].split(',')[1] # Remove base64 header
+    image_data = data['image'].split(',')[1]
     cells = data['cells']
     
-    # Load image from base64
     image_bytes = base64.b64decode(image_data)
     img = Image.open(io.BytesIO(image_bytes))
     
     results = []
     
     for cell in cells:
-        # cell: {id, x, y, width, height}
-        left = int(cell['x'])
-        top = int(cell['y'])
-        right = int(cell['x'] + cell['width'])
-        bottom = int(cell['y'] + cell['height'])
+        left = max(0, int(cell['x']))
+        top = max(0, int(cell['y']))
+        right = min(img.width, int(cell['x'] + cell['width']))
+        bottom = min(img.height, int(cell['y'] + cell['height']))
         
-        cropped_img = img.crop((left, top, right, bottom))
-        
-        # Run OCR (--psm 6 assumes a single uniform block of text)
-        text = pytesseract.image_to_string(cropped_img, config='--psm 6').strip()
+        # Avoid zero-size crop errors
+        if right > left and bottom > top:
+            cropped_img = img.crop((left, top, right, bottom))
+            text = pytesseract.image_to_string(cropped_img, config='--psm 6').strip()
+        else:
+            text = ""
+            
         results.append({
             'id': cell['id'],
             'text': text

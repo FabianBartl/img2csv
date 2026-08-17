@@ -1,77 +1,219 @@
+:root {
+    --text-color: #d10000;
+}
+
 body { 
-    font-family: sans-serif; 
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
     margin: 20px; 
-    background: #f0f0f0; 
+    background: #f4f6f8; 
+    color: #333;
 }
 
 .toolbar { 
     margin-bottom: 15px; 
-    padding: 10px; 
-    background: white; 
-    border-radius: 5px; 
-    box-shadow: 0 2px 5px rgba(0,0,0,0.1); 
+    padding: 12px 18px; 
+    background: #ffffff; 
+    border-radius: 8px; 
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08); 
     display: flex; 
-    gap: 15px; 
+    gap: 16px; 
     align-items: center; 
     flex-wrap: wrap; 
 }
 
-input[type="number"] { 
-    width: 50px; 
+.tool-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
 }
 
-#workspace { 
-    position: relative; 
-    display: inline-block; 
-    user-select: none; 
+input[type="number"] { width: 55px; padding: 4px 6px; border: 1px solid #ccc; border-radius: 4px; }
+input[type="color"] { border: none; width: 32px; height: 32px; cursor: pointer; background: none; }
+
+/* Buttons & States */
+.btn {
+    padding: 8px 14px;
+    border: 1px solid #d0d7de;
+    background-color: #f6f8fa;
+    color: #24292f;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: all 0.2s ease;
 }
 
-#source-image { 
-    max-width: 100%; 
-    display: block; 
-    border: 1px solid #ccc; 
+.btn:hover:not(:disabled) { background-color: #f3f4f6; border-color: #1b1f2426; }
+.btn.primary { background-color: #0969da; color: #fff; border: none; }
+.btn.primary:hover:not(:disabled) { background-color: #0852c1; }
+.btn.success { background-color: #1f883d; color: #fff; border: none; }
+.btn.success:hover:not(:disabled) { background-color: #1a7032; }
+
+.btn:disabled, button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    filter: grayscale(1);
 }
 
-/* The main container for the grid */
+.file-label {
+    padding: 8px 14px;
+    background: #eef2f6;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 500;
+}
+#image-upload { display: none; }
+
+/* Toggle Switch */
+.switch-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.switch-label input { display: none; }
+.slider {
+    width: 36px;
+    height: 20px;
+    background-color: #ccc;
+    border-radius: 20px;
+    position: relative;
+    transition: 0.3s;
+}
+
+.slider:before {
+    content: "";
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    top: 3px;
+    left: 3px;
+    background-color: white;
+    transition: 0.3s;
+}
+
+input:checked + .slider { background-color: #1f883d; }
+input:checked + .slider:before { transform: translateX(16px); }
+input:disabled + .slider { opacity: 0.4; cursor: not-allowed; }
+
+/* Workspace & Table Container */
+#workspace { position: relative; display: inline-block; user-select: none; margin-top: 10px; }
+#source-image { max-width: 100%; display: block; border: 1px solid #ccc; }
+
+#draw-layer { 
+    position: absolute; top: 0; left: 0; right: 0; bottom: 0; 
+    cursor: crosshair; z-index: 10; display: none; 
+}
+
 #grid-container {
     position: absolute;
     top: 0; left: 0; width: 0; height: 0;
-    border: 1px solid rgba(0, 150, 255, 0.8);
+    border: 1px solid #0096ff;
     display: none;
-    cursor: move;
+    box-sizing: border-box;
 }
 
-/* Individual cell styles */
+/* Move & Resize Handles */
+#move-handle {
+    position: absolute;
+    top: -26px;
+    left: 0;
+    background: #0096ff;
+    color: #fff;
+    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 4px 4px 0 0;
+    cursor: move;
+    font-weight: bold;
+}
+
+#resize-handle {
+    position: absolute;
+    right: -7px;
+    bottom: -7px;
+    width: 12px;
+    height: 12px;
+    background: #0096ff;
+    border: 2px solid #fff;
+    cursor: se-resize;
+    z-index: 5;
+    border-radius: 2px;
+}
+
+/* Col / Row Handles Sticking Out */
+.col-handle {
+    position: absolute;
+    top: -16px;
+    width: 10px;
+    height: 16px;
+    background: #0096ff;
+    border-radius: 3px 3px 0 0;
+    cursor: ew-resize;
+    transform: translateX(-50%);
+    z-index: 4;
+}
+
+.row-handle {
+    position: absolute;
+    left: -16px;
+    height: 10px;
+    width: 16px;
+    background: #0096ff;
+    border-radius: 3px 0 0 3px;
+    cursor: ns-resize;
+    transform: translateY(-50%);
+    z-index: 4;
+}
+
+/* Delete button on handle hover */
+.handle-del {
+    display: none;
+    position: absolute;
+    background: #d10000;
+    color: white;
+    font-size: 10px;
+    width: 12px;
+    height: 12px;
+    line-height: 10px;
+    text-align: center;
+    border-radius: 50%;
+    cursor: pointer;
+}
+
+.col-handle:hover .handle-del { display: block; top: -12px; left: -1px; }
+.row-handle:hover .handle-del { display: block; left: -12px; top: -1px; }
+
+/* Grid Cells */
 .grid-cell {
     position: absolute;
-    border: 1px solid rgba(0, 150, 255, 0.6); /* THIN LINES */
+    border: 1px solid rgba(0, 150, 255, 0.65);
     box-sizing: border-box;
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.05);
 }
 
-/* Text inside cells after OCR */
 .cell-text {
     width: 100%;
     height: 100%;
-    overflow: visible; /* NO HIDDEN OVERFLOW */
+    overflow: visible;
     outline: none;
-    font-size: 14px;
-    color: #d10000;
-    font-weight: bold;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-color);
     white-space: pre-wrap;
-    pointer-events: none; /* Disabled until frozen */
+    pointer-events: none;
+    padding: 2px;
+    box-sizing: border-box;
 }
 
-/* State classes */
-.frozen #grid-container { cursor: default; }
-.frozen .grid-cell { border-color: rgba(0, 200, 0, 0.6); }
-.frozen .cell-text { pointer-events: auto; } /* Editable only when frozen */
-
-/* Drawing overlay */
-#draw-layer { 
-    position: absolute; 
-    top: 0; left: 0; right: 0; bottom: 0; 
-    cursor: crosshair; 
-    z-index: 10; 
-    display: none; 
-}
+/* Frozen Layout Rules */
+.frozen #grid-container { border-color: rgba(0, 200, 0, 0.8); }
+.frozen .grid-cell { border-color: rgba(0, 200, 0, 0.5); }
+.frozen .cell-text { pointer-events: auto; }
+.frozen #move-handle, 
+.frozen #resize-handle, 
+.frozen .col-handle, 
+.frozen .row-handle { display: none !important; }
