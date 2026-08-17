@@ -79,22 +79,36 @@ def run_ocr():
 
     if right > left + 4 and bottom > top + 4:
       cropped_img = img.crop((left, top, right, bottom))
-
-      # Clean cell image
       processed_img = preprocess_cell_image(cropped_img)
 
-      # Run Tesseract OCR
-      text = pytesseract.image_to_string(
-          processed_img, config=custom_config
-      ).strip()
+      # Extract detailed data including confidence scores
+      data_dict = pytesseract.image_to_data(
+          processed_img, config=custom_config, output_type=pytesseract.Output.DICT
+      )
+
+      n_boxes = len(data_dict['text'])
+      recognized_texts = []
+      confidences = []
+
+      for i in range(n_boxes):
+        word = data_dict['text'][i].strip()
+        conf = int(data_dict['conf'][i])
+        if word:
+          recognized_texts.append(word)
+          if conf != -1:
+            confidences.append(conf)
+
+      text = ' '.join(recognized_texts)
+      avg_conf = int(sum(confidences) / len(confidences)) if confidences else 100
 
       # Strip leftover underscores/dashes caused by sum lines
       text = re.sub(r'^[_\-\s]+|[_\-\s]+$', '', text)
       text = re.sub(r'_{2,}', '', text)
     else:
       text = ''
+      avg_conf = 100
 
-    results.append({'id': cell['id'], 'text': text})
+    results.append({'id': cell['id'], 'text': text, 'confidence': avg_conf})
 
   return jsonify({'results': results})
 

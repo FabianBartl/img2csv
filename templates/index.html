@@ -41,6 +41,21 @@
         </label>
     </div>
 
+    <!-- Explicit Flicker Toggle (Default OFF) -->
+    <div class="tool-group toggle-group">
+        <label class="switch-label">
+            <input type="checkbox" id="flicker-toggle" onchange="toggleFlicker(this.checked)">
+            <span class="slider"></span>
+            <span>Auto Flicker</span>
+        </label>
+    </div>
+
+    <div class="tool-group">
+        <label>Speed: 
+            <input type="range" id="flicker-speed" min="1" max="10" step="1" value="4" title="Flicker frequency (Hz)" oninput="updateFlickerSpeed(this.value)">
+        </label>
+    </div>
+
     <button id="btn-clear" class="btn warning" onclick="clearTexts()" disabled>Clear Text</button>
     <button id="btn-csv" class="btn success" onclick="exportCSV()" disabled>Export CSV</button>
 </div>
@@ -53,7 +68,7 @@
         <!-- Main Movement Control -->
         <div id="move-handle" title="Drag to move entire table">⠿ Move Table</div>
         
-        <!-- Corner Resize Handles (Top-Left & Bottom-Right) -->
+        <!-- Corner Resize Handles -->
         <div id="resize-tl-handle" class="corner-resize" title="Drag to resize from top-left"></div>
         <div id="resize-br-handle" class="corner-resize" title="Drag to resize from bottom-right"></div>
         
@@ -64,6 +79,17 @@
         <div id="col-handles"></div>
         <div id="row-handles"></div>
         <div id="cells-layer"></div>
+    </div>
+</div>
+
+<!-- Docked Row Inspection Strip Panel -->
+<div id="inspection-strip">
+    <div class="strip-canvas-container">
+        <canvas id="strip-canvas"></canvas>
+    </div>
+    <div class="strip-info">
+        <label id="strip-meta">Active Cell (Row -, Col -)</label>
+        <input type="text" id="strip-input" placeholder="Edit current cell text..." oninput="updateActiveCellText(this.value)">
     </div>
 </div>
 

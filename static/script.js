@@ -2,6 +2,13 @@ let isDrawing = false;
 let startX, startY;
 let isFrozen = false;
 
+let isFlickerEnabled = false;
+let flickerInterval = null;
+let flickerHz = 4;
+
+let activeCellIndex = null;
+let cellsMetadata = [];
+
 let tableRect = { x: 0, y: 0, w: 0, h: 0 };
 let colPositions = []; 
 let rowPositions = []; 
@@ -13,6 +20,12 @@ const gridContainer = document.getElementById('grid-container');
 const cellsLayer = document.getElementById('cells-layer');
 const colHandlesDiv = document.getElementById('col-handles');
 const rowHandlesDiv = document.getElementById('row-handles');
+const opacitySlider = document.getElementById('opacity-slider');
+const flickerToggle = document.getElementById('flicker-toggle');
+const inspectionStrip = document.getElementById('inspection-strip');
+const stripCanvas = document.getElementById('strip-canvas');
+const stripInput = document.getElementById('strip-input');
+const stripMeta = document.getElementById('strip-meta');
 
 const rowsInput = document.getElementById('rows-input');
 const colsInput = document.getElementById('cols-input');
@@ -47,10 +60,15 @@ imageInput.addEventListener('change', function(e) {
 });
 
 function resetTable() {
+    stopFlicker();
+    if (flickerToggle) flickerToggle.checked = false;
+    isFlickerEnabled = false;
+
     gridContainer.style.display = 'none';
     cellsLayer.innerHTML = '';
     colHandlesDiv.innerHTML = '';
     rowHandlesDiv.innerHTML = '';
+    inspectionStrip.classList.remove('active');
     updateUIState(false);
 }
 
@@ -69,7 +87,48 @@ function updateTextColor(color) {
 }
 
 function updateOpacity(val) {
-    gridContainer.style.opacity = val;
+    if (!isFlickerEnabled) {
+        gridContainer.style.opacity = val;
+    }
+}
+
+/* FLICKER LOGIC - Off by default, explicitly controlled */
+function toggleFlicker(enabled) {
+    isFlickerEnabled = enabled;
+    if (isFlickerEnabled) {
+        startFlicker();
+    } else {
+        stopFlicker();
+    }
+}
+
+function updateFlickerSpeed(val) {
+    flickerHz = parseInt(val);
+    if (isFlickerEnabled) {
+        startFlicker(); // Restart with new frequency
+    }
+}
+
+function startFlicker() {
+    stopFlicker();
+    if (!isFlickerEnabled) return;
+
+    const intervalMs = 1000 / flickerHz;
+    let showGrid = true;
+
+    flickerInterval = setInterval(() => {
+        showGrid = !showGrid;
+        const baseOpacity = parseFloat(opacitySlider.value) || 1;
+        gridContainer.style.opacity = showGrid ? baseOpacity : '0';
+    }, intervalMs);
+}
+
+function stopFlicker() {
+    if (flickerInterval) {
+        clearInterval(flickerInterval);
+        flickerInterval = null;
+    }
+    gridContainer.style.opacity = opacitySlider.value;
 }
 
 function clearTexts() { 
@@ -78,6 +137,12 @@ function clearTexts() {
 
 function startDrawing() {
     if (!sourceImage.src) return alert('Please load an image first!');
+    
+    // Ensure flicker is stopped when drawing
+    stopFlicker();
+    if (flickerToggle) flickerToggle.checked = false;
+    isFlickerEnabled = false;
+
     toggleFreeze(false);
     drawLayer.style.display = 'block';
     gridContainer.style.display = 'none';
@@ -148,6 +213,7 @@ function renderGrid() {
 
     for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
+            const cellIndex = (r * cols) + c;
             const cell = document.createElement('div');
             cell.className = 'grid-cell';
             cell.style.left = (colPositions[c] * tableRect.w) + 'px';
@@ -158,15 +224,29 @@ function renderGrid() {
             const textDiv = document.createElement('div');
             textDiv.className = 'cell-text';
             textDiv.contentEditable = true;
-            if (oldTexts[(r * cols) + c]) {
-                textDiv.innerText = oldTexts[(r * cols) + c];
+            if (oldTexts[cellIndex]) {
+                textDiv.innerText = oldTexts[cellIndex];
             }
+
+            if (isFrozen && cellsMetadata[cellIndex]) {
+                const conf = cellsMetadata[cellIndex].confidence;
+                if (conf < 70) {
+                    cell.classList.add('confidence-low');
+                } else if (conf < 90) {
+                    cell.classList.add('confidence-medium');
+                }
+            }
+
+            cell.addEventListener('mousedown', () => {
+                if (isFrozen) setActiveCell(cellIndex);
+            });
 
             cell.appendChild(textDiv);
             cellsLayer.appendChild(cell);
         }
     }
 
+    // Render Column handles
     for (let c = 1; c < cols; c++) {
         const handle = document.createElement('div');
         handle.className = 'col-handle';
@@ -178,10 +258,7 @@ function renderGrid() {
         const delBtn = document.createElement('span'); 
         delBtn.className = 'handle-del'; 
         delBtn.innerText = '×';
-        delBtn.onmousedown = (e) => { 
-            e.stopPropagation(); 
-            deleteCol(c); 
-        };
+        delBtn.onmousedown = (e) => { e.stopPropagation(); deleteCol(c); };
 
         handle.appendChild(delBtn);
         handle.appendChild(bar);
@@ -189,6 +266,7 @@ function renderGrid() {
         colHandlesDiv.appendChild(handle);
     }
 
+    // Render Row handles
     for (let r = 1; r < rows; r++) {
         const handle = document.createElement('div');
         handle.className = 'row-handle';
@@ -200,10 +278,7 @@ function renderGrid() {
         const delBtn = document.createElement('span'); 
         delBtn.className = 'handle-del'; 
         delBtn.innerText = '×';
-        delBtn.onmousedown = (e) => { 
-            e.stopPropagation(); 
-            deleteRow(r); 
-        };
+        delBtn.onmousedown = (e) => { e.stopPropagation(); deleteRow(r); };
 
         handle.appendChild(delBtn);
         handle.appendChild(bar);
@@ -386,8 +461,6 @@ async function runOCR() {
         cell.querySelector('.cell-text').innerText = "...";
     });
 
-    toggleFreeze(true);
-
     try {
         const response = await fetch('/ocr', {
             method: 'POST',
@@ -395,9 +468,16 @@ async function runOCR() {
             body: JSON.stringify({ image: sourceImage.src, cells: cellsData })
         });
         const data = await response.json();
+        
+        cellsMetadata = [];
         data.results.forEach(res => {
+            cellsMetadata[res.id] = { confidence: res.confidence };
             cells[res.id].querySelector('.cell-text').innerText = res.text;
         });
+
+        // Freeze layout automatically after OCR
+        toggleFreeze(true);
+        if (cells.length > 0) setActiveCell(0);
     } catch (error) {
         alert('Error connecting to OCR backend.');
     }
@@ -407,10 +487,59 @@ function toggleFreeze(freezeState) {
     isFrozen = freezeState;
     document.getElementById('freeze-toggle').checked = freezeState;
     const ws = document.getElementById('workspace');
+    
     if (isFrozen) {
         ws.classList.add('frozen');
+        renderGrid();
+        inspectionStrip.classList.add('active');
     } else {
         ws.classList.remove('frozen');
+        inspectionStrip.classList.remove('active');
+    }
+}
+
+function setActiveCell(index) {
+    activeCellIndex = index;
+    const cells = document.querySelectorAll('.grid-cell');
+    if (!cells[index]) return;
+
+    const cols = colPositions.length - 1;
+    const r = Math.floor(index / cols) + 1;
+    const c = (index % cols) + 1;
+    const textVal = cells[index].querySelector('.cell-text').innerText;
+    const conf = cellsMetadata[index] ? cellsMetadata[index].confidence : 100;
+
+    stripMeta.innerText = `Row ${r}, Col ${c} (Confidence: ${conf}%)`;
+    stripInput.value = textVal;
+
+    drawInspectionCrop(index);
+}
+
+function drawInspectionCrop(index) {
+    const cells = document.querySelectorAll('.grid-cell');
+    if (!cells[index]) return;
+
+    const cellRect = cells[index].getBoundingClientRect();
+    const imgRect = sourceImage.getBoundingClientRect();
+    const scaleX = sourceImage.naturalWidth / imgRect.width;
+    const scaleY = sourceImage.naturalHeight / imgRect.height;
+
+    const sx = (cellRect.left - imgRect.left) * scaleX;
+    const sy = (cellRect.top - imgRect.top) * scaleY;
+    const sw = cellRect.width * scaleX;
+    const sh = cellRect.height * scaleY;
+
+    stripCanvas.width = sw;
+    stripCanvas.height = sh;
+    const ctx = stripCanvas.getContext('2d');
+    ctx.drawImage(sourceImage, sx, sy, sw, sh, 0, 0, sw, sh);
+}
+
+function updateActiveCellText(newVal) {
+    if (activeCellIndex === null) return;
+    const cells = document.querySelectorAll('.grid-cell');
+    if (cells[activeCellIndex]) {
+        cells[activeCellIndex].querySelector('.cell-text').innerText = newVal;
     }
 }
 
