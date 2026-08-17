@@ -147,4 +147,5 @@ def save_training_data():
 
 
 if __name__ == '__main__':
-  app.run(debug=True, port=5000)
+  app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # Max 16MB per request
+  app.run(debug=False, port=5000, host="0.0.0.0")
