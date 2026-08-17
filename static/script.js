@@ -69,6 +69,8 @@ function resetTable() {
     colHandlesDiv.innerHTML = '';
     rowHandlesDiv.innerHTML = '';
     inspectionStrip.classList.remove('active');
+    activeCellIndex = null;
+    cellsMetadata = [];
     updateUIState(false);
 }
 
@@ -92,7 +94,6 @@ function updateOpacity(val) {
     }
 }
 
-/* FLICKER LOGIC - Off by default, explicitly controlled */
 function toggleFlicker(enabled) {
     isFlickerEnabled = enabled;
     if (isFlickerEnabled) {
@@ -105,7 +106,7 @@ function toggleFlicker(enabled) {
 function updateFlickerSpeed(val) {
     flickerHz = parseInt(val);
     if (isFlickerEnabled) {
-        startFlicker(); // Restart with new frequency
+        startFlicker();
     }
 }
 
@@ -133,12 +134,13 @@ function stopFlicker() {
 
 function clearTexts() { 
     document.querySelectorAll('.cell-text').forEach(el => el.innerText = ''); 
+    cellsMetadata.forEach(meta => meta.isEdited = true);
+    renderGrid();
 }
 
 function startDrawing() {
     if (!sourceImage.src) return alert('Please load an image first!');
     
-    // Ensure flicker is stopped when drawing
     stopFlicker();
     if (flickerToggle) flickerToggle.checked = false;
     isFlickerEnabled = false;
@@ -230,11 +232,17 @@ function renderGrid() {
 
             if (isFrozen && cellsMetadata[cellIndex]) {
                 const conf = cellsMetadata[cellIndex].confidence;
-                if (conf < 70) {
+                if (cellsMetadata[cellIndex].isEdited) {
+                    cell.classList.add('cell-edited');
+                } else if (conf < 70) {
                     cell.classList.add('confidence-low');
                 } else if (conf < 90) {
                     cell.classList.add('confidence-medium');
                 }
+            }
+
+            if (cellIndex === activeCellIndex && isFrozen) {
+                cell.classList.add('active-cell');
             }
 
             cell.addEventListener('mousedown', () => {
@@ -246,7 +254,6 @@ function renderGrid() {
         }
     }
 
-    // Render Column handles
     for (let c = 1; c < cols; c++) {
         const handle = document.createElement('div');
         handle.className = 'col-handle';
@@ -266,7 +273,6 @@ function renderGrid() {
         colHandlesDiv.appendChild(handle);
     }
 
-    // Render Row handles
     for (let r = 1; r < rows; r++) {
         const handle = document.createElement('div');
         handle.className = 'row-handle';
@@ -471,11 +477,14 @@ async function runOCR() {
         
         cellsMetadata = [];
         data.results.forEach(res => {
-            cellsMetadata[res.id] = { confidence: res.confidence };
+            cellsMetadata[res.id] = { 
+                confidence: res.confidence, 
+                originalText: res.text,
+                isEdited: false 
+            };
             cells[res.id].querySelector('.cell-text').innerText = res.text;
         });
 
-        // Freeze layout automatically after OCR
         toggleFreeze(true);
         if (cells.length > 0) setActiveCell(0);
     } catch (error) {
@@ -495,13 +504,24 @@ function toggleFreeze(freezeState) {
     } else {
         ws.classList.remove('frozen');
         inspectionStrip.classList.remove('active');
+        if (activeCellIndex !== null) {
+            const cells = document.querySelectorAll('.grid-cell');
+            if (cells[activeCellIndex]) cells[activeCellIndex].classList.remove('active-cell');
+        }
     }
 }
 
 function setActiveCell(index) {
-    activeCellIndex = index;
     const cells = document.querySelectorAll('.grid-cell');
     if (!cells[index]) return;
+
+    // Remove active class from previous active cell
+    if (activeCellIndex !== null && cells[activeCellIndex]) {
+        cells[activeCellIndex].classList.remove('active-cell');
+    }
+
+    activeCellIndex = index;
+    cells[activeCellIndex].classList.add('active-cell');
 
     const cols = colPositions.length - 1;
     const r = Math.floor(index / cols) + 1;
@@ -513,6 +533,10 @@ function setActiveCell(index) {
     stripInput.value = textVal;
 
     drawInspectionCrop(index);
+
+    // Focus input and select text for rapid editing
+    stripInput.focus();
+    stripInput.select();
 }
 
 function drawInspectionCrop(index) {
@@ -538,10 +562,55 @@ function drawInspectionCrop(index) {
 function updateActiveCellText(newVal) {
     if (activeCellIndex === null) return;
     const cells = document.querySelectorAll('.grid-cell');
-    if (cells[activeCellIndex]) {
-        cells[activeCellIndex].querySelector('.cell-text').innerText = newVal;
+    if (!cells[activeCellIndex]) return;
+
+    cells[activeCellIndex].querySelector('.cell-text').innerText = newVal;
+
+    if (!cellsMetadata[activeCellIndex]) {
+        cellsMetadata[activeCellIndex] = { confidence: 100, originalText: '', isEdited: true };
+    }
+
+    const meta = cellsMetadata[activeCellIndex];
+    if (meta.originalText !== undefined && newVal !== meta.originalText) {
+        meta.isEdited = true;
+        cells[activeCellIndex].classList.add('cell-edited');
+        cells[activeCellIndex].classList.remove('confidence-low', 'confidence-medium');
+    } else {
+        meta.isEdited = false;
+        cells[activeCellIndex].classList.remove('cell-edited');
+        if (meta.confidence < 70) cells[activeCellIndex].classList.add('confidence-low');
+        else if (meta.confidence < 90) cells[activeCellIndex].classList.add('confidence-medium');
     }
 }
+
+/* Keyboard Navigation Listener for Inspection */
+document.addEventListener('keydown', (e) => {
+    if (!isFrozen || activeCellIndex === null) return;
+
+    const cols = colPositions.length - 1;
+    const rows = rowPositions.length - 1;
+    const total = cols * rows;
+
+    if (e.target === stripInput) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            const nextIdx = activeCellIndex + cols;
+            if (nextIdx < total) setActiveCell(nextIdx);
+        } else if (e.key === 'Tab') {
+            e.preventDefault();
+            const nextIdx = e.shiftKey ? activeCellIndex - 1 : activeCellIndex + 1;
+            if (nextIdx >= 0 && nextIdx < total) setActiveCell(nextIdx);
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            const nextIdx = activeCellIndex - cols;
+            if (nextIdx >= 0) setActiveCell(nextIdx);
+        } else if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            const nextIdx = activeCellIndex + cols;
+            if (nextIdx < total) setActiveCell(nextIdx);
+        }
+    }
+});
 
 function exportCSV() {
     const cols = colPositions.length - 1;

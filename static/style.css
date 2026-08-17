@@ -381,6 +381,18 @@ input:checked + .slider:before {
     box-shadow: inset 0 0 0 2px #cf222e !important; /* Red */
 }
 
+/* Manuell editierte Zelle (Violetter Rahmen) */
+.cell-edited {
+    box-shadow: inset 0 0 0 2px #7c3aed !important; /* Purple */
+}
+
+/* Aktive gewählte Zelle (Prominenter blauer Rahmen über den grünen Boxen) */
+.grid-cell.active-cell {
+    outline: 3px solid #0969da !important;
+    outline-offset: -3px;
+    z-index: 20 !important;
+}
+
 /* Docked Inspection Strip Panel */
 #inspection-strip {
     position: fixed;
